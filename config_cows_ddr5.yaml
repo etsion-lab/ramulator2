@@ -1,0 +1,45 @@
+Frontend:
+  impl: SimpleO3
+  ipc: 6
+  inst_window_depth: 200
+  clock_ratio: 1
+  num_expected_insts: 1600000000
+  traces: 
+    - example_inst.trace
+
+  Translation:
+    impl: RandomTranslation
+    max_addr: 2147483648
+              
+
+MemorySystem:
+  impl: GenericDRAM
+  clock_ratio: 1
+
+  DRAM:
+    impl: DDR5-cow
+    drampower_enable: true
+    org:
+      preset: DDR5_32Gb_x8
+      channel: 1
+      rank: 2
+    timing:
+      preset: DDR5_8000C
+    voltage:
+    current:
+    RFM:
+      BRC: 2
+
+  Controller:
+    impl: Generic
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: ClosedRowPolicy
+      cap: 4
+    plugins:
+
+  AddrMapper:
+    impl: RoBaRaCoCh
