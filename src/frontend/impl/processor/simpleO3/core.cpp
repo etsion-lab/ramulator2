@@ -125,15 +125,16 @@ void SimpleO3Core::tick() {
   // First, issue the non-memory instructions
   int num_inserted_insts = 0;
   while (m_num_bubbles > 0) {
-    if (num_inserted_insts == m_window.m_ipc) {
-      return;
-    }
-    if (m_window.is_full()) {
-      return;
-    };
-    m_window.insert(true, -1);
-    num_inserted_insts++;
-    m_num_bubbles--;
+//      printf("m_clk=%ld, m_num_bubbles==%d\n", (unsigned long)m_clk, m_num_bubbles);
+      if (num_inserted_insts == m_window.m_ipc) {
+	  return;
+      }
+      if (m_window.is_full()) {
+	  return;
+      };
+      m_window.insert(true, -1);
+      num_inserted_insts++;
+      m_num_bubbles--;
   }
 
   // Second, try to send the load to the LLC

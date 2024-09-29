@@ -309,6 +309,7 @@ struct PowerStats {
 
     double total_background_energy = 0;
     double total_cmd_energy = 0;
+    double total_refresh_energy = 0;
     double total_energy = 0;
 
     std::vector<size_t> cmd_counters;

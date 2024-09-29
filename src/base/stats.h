@@ -11,6 +11,12 @@
 #include "base/type.h"
 #include "base/exception.h"
 
+#include <cstdio>
+#define YOAV(fmt...)				\
+    do {					\
+	printf("YOAV: " fmt);			\
+	printf("\n");				\
+    } while(0)
 
 namespace Ramulator {
 
@@ -55,7 +61,7 @@ class StatWrapper : public StatWrapperBase {
     StatWrapper(std::vector<T>& val, const Implementation& impl, Stats& stats) : _ref(&val), _impl(impl), _stats(stats) {};
 
     StatWrapper& name(std::string name) { 
-      _name = name; 
+	_name = name; 
       if (auto it = _stats._registry.find(name); it != _stats._registry.end()) {
         throw ConfigurationError("Stat {} of implementation is already registered!", name);    
       }
@@ -70,6 +76,7 @@ class StatWrapper : public StatWrapperBase {
     StatWrapper& desc(std::string desc) { _desc = desc; return *this; };
 
     void emit_to(YAML::Emitter& emitter) override {
+	
       if        (std::holds_alternative<T*>(_ref)) {
         emitter << YAML::Key << _name;
         emitter << YAML::Value << *(std::get<T*>(_ref));
