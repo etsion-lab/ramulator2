@@ -11,19 +11,22 @@ class DDR5COW : public IDRAM, public Implementation {
 
   public:
     inline static const std::map<std::string, Organization> org_presets = {
-      //   name         density   DQ   Ch Ra Bg Ba   Ro     Co
-      {"DDR5_8Gb_x4",   {8<<10,   4,  {1, 1, 8, 2, 1<<16, 1<<11}}},
-      {"DDR5_8Gb_x8",   {8<<10,   8,  {1, 1, 8, 2, 1<<16, 1<<10}}},
-      {"DDR5_8Gb_x16",  {8<<10,   16, {1, 1, 4, 2, 1<<16, 1<<10}}},
-      {"DDR5_16Gb_x4",  {16<<10,  4,  {1, 1, 8, 4, 1<<16, 1<<11}}},
-      {"DDR5_16Gb_x8",  {16<<10,  8,  {1, 1, 8, 4, 1<<16, 1<<10}}},
-      {"DDR5_16Gb_x16", {16<<10,  16, {1, 1, 4, 4, 1<<16, 1<<10}}},
-      {"DDR5_32Gb_x4",  {32<<10,  4,  {1, 1, 8, 4, 1<<17, 1<<11}}},
-      {"DDR5_32Gb_x8",  {32<<10,  8,  {1, 1, 8, 4, 1<<17, 1<<10}}},
-      {"DDR5_32Gb_x16", {32<<10,  16, {1, 1, 4, 4, 1<<17, 1<<10}}},
-      {"DDR5_64Gb_x4",  {64<<10,  4,  {1, 1, 8, 4, 1<<18, 1<<11}}},
-      {"DDR5_64Gb_x8",  {64<<10,  8,  {1, 1, 8, 4, 1<<18, 1<<10}}},
-      {"DDR5_64Gb_x16", {64<<10,  16, {1, 1, 4, 4, 1<<18, 1<<10}}},
+      //   name         density     DQ   Ch Ra Bg Ba   Ro     Co
+      {"DDR5_8Gb_x4",    {8<<10,    4,  {1, 1, 8, 2, 1<<16, 1<<11}}},
+      {"DDR5_8Gb_x8",    {8<<10,    8,  {1, 1, 8, 2, 1<<16, 1<<10}}},
+      {"DDR5_8Gb_x16",   {8<<10,    16, {1, 1, 4, 2, 1<<16, 1<<10}}},
+      {"DDR5_16Gb_x4",   {16<<10,   4,  {1, 1, 8, 4, 1<<16, 1<<11}}},
+      {"DDR5_16Gb_x8",   {16<<10,   8,  {1, 1, 8, 4, 1<<16, 1<<10}}},
+      {"DDR5_16Gb_x16",  {16<<10,   16, {1, 1, 4, 4, 1<<16, 1<<10}}},
+      {"DDR5_32Gb_x4",   {32<<10,   4,  {1, 1, 8, 4, 1<<17, 1<<11}}},
+      {"DDR5_32Gb_x8",   {32<<10,   8,  {1, 1, 8, 4, 1<<17, 1<<10}}},
+      {"DDR5_32Gb_x16",  {32<<10,   16, {1, 1, 4, 4, 1<<17, 1<<10}}},
+      {"DDR5_64Gb_x4",   {64<<10,   4,  {1, 1, 8, 4, 1<<18, 1<<11}}},
+      {"DDR5_64Gb_x8",   {64<<10,   8,  {1, 1, 8, 4, 1<<18, 1<<10}}},
+      {"DDR5_64Gb_x16",  {64<<10,   16, {1, 1, 4, 4, 1<<18, 1<<10}}},
+      {"DDR5_128Gb_x4",  {128<<10,  4,  {1, 1, 8, 4, 1<<19, 1<<11}}},
+      {"DDR5_128Gb_x8",  {128<<10,  8,  {1, 1, 8, 4, 1<<19, 1<<10}}},
+      {"DDR5_128Gb_x16", {128<<10,  16, {1, 1, 4, 4, 1<<19, 1<<10}}},
     };
 
     inline static const std::map<std::string, std::vector<int>> timing_presets = {
@@ -456,16 +459,16 @@ class DDR5COW : public IDRAM, public Implementation {
 
       // Refresh timings
       // tRFC table (unit is nanosecond!)
-      constexpr int tRFC_TABLE[2][3] = {
-      //  8Gb   16Gb  32Gb  
-        { 195,  295,  410 }, // Normal refresh (tRFC1)
-        { 130,  160,  220 }, // FGR 2x (tRFC2)
+      constexpr int tRFC_TABLE[2][5] = {
+      //  8Gb   16Gb  32Gb  64Gb  128Gb
+        { 195,  295,  410,  820,  1640 }, // Normal refresh (tRFC1)
+        { 130,  160,  220,  240,   480 }, // FGR 2x (tRFC2)
       };
 
       // tRFCsb table (unit is nanosecond!)
-      constexpr int tRFCsb_TABLE[1][3] = {
-      //  8Gb   16Gb  32Gb  
-        { 115,  130,  190 }, // Normal refresh (tRFC1)
+      constexpr int tRFCsb_TABLE[1][5] = {
+      //  8Gb   16Gb  32Gb  64Gb  128Gb
+	{ 115,  130,  190, 380, 760}, // Normal refresh (tRFC1)
       };
 
       // tREFI(base) table (unit is nanosecond!)
@@ -475,16 +478,20 @@ class DDR5COW : public IDRAM, public Implementation {
           case 8192:  return 0;
           case 16384: return 1;
           case 32768: return 2;
+          case 65536: return 3;
+          case 131072: return 4;
           default:    return -1;
         }
       }(m_organization.density);
 
+      bool m_high_temp = param<bool>("high_temp").desc("Is operating temperature high? (above 85c)").default_val(false);
+      
       m_RH_radius = param<int>("RH_radius").desc("The number of rows to refresh on each side").default_val(2);
 
       m_timing_vals("nRFC1")  = JEDEC_rounding_DDR5(tRFC_TABLE[0][density_id], tCK_ps);
       m_timing_vals("nRFC2")  = JEDEC_rounding_DDR5(tRFC_TABLE[1][density_id], tCK_ps);
       m_timing_vals("nRFCsb") = JEDEC_rounding_DDR5(tRFCsb_TABLE[0][density_id], tCK_ps);
-      m_timing_vals("nREFI")  = JEDEC_rounding_DDR5(tREFI_BASE, tCK_ps);
+      m_timing_vals("nREFI")  = JEDEC_rounding_DDR5( (m_high_temp ? tREFI_BASE/2 : tREFI_BASE), tCK_ps);
 
       m_timing_vals("nRFM1")  = m_timing_vals("nRFC1");
       m_timing_vals("nRFM2")  = m_timing_vals("nRFC2");
