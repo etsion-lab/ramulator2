@@ -3,12 +3,17 @@ Frontend:
   ipc: 6
   inst_window_depth: 200
   clock_ratio: 1
-  num_expected_insts: 1600000000
+#  num_expected_insts: 1600000000
+  num_expected_insts: 100000000
+#  num_expected_insts: 1000000 # testing
   traces: 
-    - example_inst.trace
+  - rand-read-trace
+#  - seq-read-trace
+#  - example_inst.trace
 
   Translation:
-    impl: RandomTranslation
+#    impl: RandomTranslation
+    impl: NoTranslation
     max_addr: 2147483648
               
 
@@ -19,11 +24,15 @@ MemorySystem:
   DRAM:
     impl: DDR5-cow
     drampower_enable: true
+    high_temp: false
+#    high_temp: true
     org:
-      preset: DDR5_32Gb_x8
+#      preset: DDR5_32Gb_x8
+      preset: DDR5_64Gb_x8
       channel: 1
       rank: 2
     timing:
+#      preset: DDR5_3200C
       preset: DDR5_8000C
     voltage:
     current:
@@ -38,7 +47,8 @@ MemorySystem:
       impl: AllBank
     RowPolicy:
       impl: ClosedRowPolicy
-      cap: 4
+      cap: 1
+#      cap: 4
     plugins:
 
   AddrMapper:

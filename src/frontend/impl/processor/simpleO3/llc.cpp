@@ -55,6 +55,12 @@ void SimpleO3LLC::tick() {
 bool SimpleO3LLC::send(Request req) {
   CacheSet_t& set = get_set(req.addr);
 
+#if 0
+  if((s_llc_read_access + s_llc_write_access) % 100000 == 0) {
+      YOAV("Total llc accesses %d (read=%d, write=%d)", s_llc_read_access+s_llc_write_access, s_llc_read_access, s_llc_write_access);
+  }
+#endif
+  
   if (req.type_id == Request::Type::Read) {
     s_llc_read_access++;
   } else if (req.type_id == Request::Type::Write) {

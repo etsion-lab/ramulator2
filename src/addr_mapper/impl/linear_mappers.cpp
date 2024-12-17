@@ -46,6 +46,11 @@ class LinearMapperBase : public IAddrMapper {
 
       // Assume column is always the last level
       m_col_bits_idx = m_num_levels - 1;
+
+      for (size_t level = 0; level < m_addr_bits.size(); level++) {
+	  YOAV("m_addr_bits[%lu] = %d", level, m_addr_bits[level]);
+      }
+
     }
 
 };
@@ -75,13 +80,41 @@ class RoBaRaCoCh final : public LinearMapperBase, public Implementation {
   RAMULATOR_REGISTER_IMPLEMENTATION(IAddrMapper, RoBaRaCoCh, "RoBaRaCoCh", "Applies a RoBaRaCoCh mapping to the address.");
 
   public:
-    void init() override { };
+    void init() override {  };
 
     void setup(IFrontEnd* frontend, IMemorySystem* memory_system) override {
       LinearMapperBase::setup(frontend, memory_system);
+#if 0
+      int64_t bit = 0;
+      YOAV("TX bits %ld..%ld", bit, bit+(int64_t)m_tx_offset-1);
+      bit += (int64_t)m_tx_offset;
+      if(m_addr_bits[0])
+	YOAV("Ch bits %ld..%ld", bit, bit+(int64_t)m_addr_bits[0]-1);
+      bit += (int64_t)m_addr_bits[0];
+
+      if(m_addr_bits[m_addr_bits.size() - 1])
+	YOAV("Co bits %ld..%ld", bit, bit+(int64_t)(m_addr_bits.size() - 1)-1);
+      bit += (int64_t)(m_addr_bits.size() - 1);
+
+      if(m_addr_bits[1])
+	YOAV("Ra bits %ld..%ld", bit, bit+(int64_t)m_addr_bits[1]-1);
+      int64_t rank_bit=bit;
+      bit += (int64_t)m_addr_bits[1];
+      if(m_addr_bits[2])
+	YOAV("Bg bits %ld..%ld", bit, bit+(int64_t)m_addr_bits[2]-1);
+      bit += (int64_t)m_addr_bits[2];
+      if(m_addr_bits[3])
+	YOAV("Ba bits %ld..%ld", bit, bit+(int64_t)m_addr_bits[3]-1);
+      bit += (int64_t)m_addr_bits[3];
+      if(m_addr_bits[4])
+	YOAV("Ro bits %ld..%ld", bit, bit+(int64_t)m_addr_bits[4]-1);
+      bit += (int64_t)m_addr_bits[4];
+#endif
     }
 
     void apply(Request& req) override {
+      int64_t orig_addr = (int64_t)req.addr;
+      
       req.addr_vec.resize(m_num_levels, -1);
       Addr_t addr = req.addr >> m_tx_offset;
       req.addr_vec[0] = slice_lower_bits(addr, m_addr_bits[0]);
@@ -89,6 +122,8 @@ class RoBaRaCoCh final : public LinearMapperBase, public Implementation {
       for (int i = 1; i <= m_row_bits_idx; i++) {
         req.addr_vec[i] = slice_lower_bits(addr, m_addr_bits[i]);
       }
+
+      //      YOAV("Rank: addr=0x%016lx, rank_bit=%lu, req.addr_vec[%d]=%d", (uint64_t)req.addr, (orig_addr>>rank_bit)&0x1L, m_dram->m_levels("rank"), req.addr_vec[m_dram->m_levels("rank")]);
     }
 };
 
