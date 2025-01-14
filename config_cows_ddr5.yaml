@@ -15,7 +15,8 @@ Frontend:
   Translation:
 #    impl: RandomTranslation
     impl: NoTranslation
-    max_addr: 2147483648
+    max_addr: 9223372036854775807
+#    max_addr: 2147483648
 
 
 MemorySystem:
