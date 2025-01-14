@@ -15,7 +15,26 @@ namespace Ramulator {
 namespace fs = std::filesystem;
 
 SimpleO3Core::Trace::Trace(std::string file_path_str) {
-  fs::path trace_path(file_path_str);
+  // search for app ID
+  std::vector<std::string> path_tokens;
+  int64_t app_id = 0x0;
+
+  tokenize(path_tokens, file_path_str, ":");
+  auto num_path_tokens = path_tokens.size();
+
+  if(num_path_tokens != 1 && num_path_tokens != 2) {
+    throw ConfigurationError("Badly formatted trace path {}!", file_path_str);
+  }
+  if(num_path_tokens == 2) {
+    app_id = std::stoll(path_tokens[1]);
+    if(app_id < 0 || app_id > 127)
+      throw ConfigurationError("Bad application ID {} in trace_path {}!", app_id, file_path_str);
+
+    printf("str=%s, path=%s, app_id=%ld (0x%lx)\n",
+          file_path_str.c_str(), path_tokens[0].c_str(), app_id, app_id);
+  }
+
+  fs::path trace_path(path_tokens[0]);
   if (!fs::exists(trace_path)) {
     throw ConfigurationError("Trace {} does not exist!", file_path_str);
   }
@@ -40,11 +59,17 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
       throw ConfigurationError("Trace {} format invalid!", file_path_str);
     }
     int bubble_count = std::stoi(tokens[0]);
-    Addr_t load_addr = std::stoll(tokens[1]);
+
+    Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
+    assert((load_addr >> APP_ID_OFFSET) == 0);
+    load_addr |= (app_id << APP_ID_OFFSET); // add APP ID to the address
 
     bool has_store = num_tokens == 2 ? false : true;
     if (has_store) {
-      Addr_t store_addr = std::stoll(tokens[2]);
+      Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
+      assert((store_addr >> APP_ID_OFFSET) == 0);
+      store_addr |= (app_id << APP_ID_OFFSET);  // add APP ID to the address
+
       m_trace.push_back({bubble_count, load_addr, store_addr});
     } else {
       m_trace.push_back({bubble_count, load_addr, -1});
