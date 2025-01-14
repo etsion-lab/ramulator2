@@ -4,13 +4,19 @@ Frontend:
   inst_window_depth: 200
   clock_ratio: 1
 #  num_expected_insts: 1600000000
-  num_expected_insts: 1000000000
+  num_expected_insts: 100000000
 #  num_expected_insts: 1000000 # testing
   traces:
   - trace-in-memory-analytics-core-1:126
 #  - rand-read-trace
 #  - seq-read-trace
 #  - example_inst.trace
+
+  llc_latency: 50
+  llc_linesize: 64
+  llc_associativity: 8
+  llc_num_mshr_per_core: 16
+  llc_capacity_per_core: 4MB
 
   Translation:
 #    impl: RandomTranslation
