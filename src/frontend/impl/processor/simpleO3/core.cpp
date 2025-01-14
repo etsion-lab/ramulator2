@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <iostream>
 #include <fstream>
+#include <regex>
 
 #include <spdlog/spdlog.h>
 
@@ -25,18 +26,23 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
   }
 
   std::string line;
+  std::regex comment_regex(" *#.*$");
   while (std::getline(trace_file, line)) {
     std::vector<std::string> tokens;
+
+    // remove comments
+    line = std::regex_replace(line, comment_regex, "");
     tokenize(tokens, line, " ");
 
     int num_tokens = tokens.size();
+
     if (num_tokens != 2 & num_tokens != 3) {
       throw ConfigurationError("Trace {} format invalid!", file_path_str);
     }
     int bubble_count = std::stoi(tokens[0]);
     Addr_t load_addr = std::stoll(tokens[1]);
 
-    bool has_store = num_tokens == 2 ? false : true; 
+    bool has_store = num_tokens == 2 ? false : true;
     if (has_store) {
       Addr_t store_addr = std::stoll(tokens[2]);
       m_trace.push_back({bubble_count, load_addr, store_addr});
@@ -179,7 +185,7 @@ void SimpleO3Core::tick() {
   auto inst = m_trace.get_next_inst();
   m_num_bubbles = inst.bubble_count;
   m_load_addr = inst.load_addr;
-  m_writeback_addr = inst.store_addr;      
+  m_writeback_addr = inst.store_addr;
 }
 
 void SimpleO3Core::receive(Request& req) {
