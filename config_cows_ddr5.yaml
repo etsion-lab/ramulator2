@@ -4,10 +4,11 @@ Frontend:
   inst_window_depth: 200
   clock_ratio: 1
 #  num_expected_insts: 1600000000
-  num_expected_insts: 100000000
+  num_expected_insts: 1000000000
 #  num_expected_insts: 1000000 # testing
-  traces: 
-  - rand-read-trace
+  traces:
+  - trace-in-memory-analytics-core-1
+#  - rand-read-trace
 #  - seq-read-trace
 #  - example_inst.trace
 
@@ -15,7 +16,7 @@ Frontend:
 #    impl: RandomTranslation
     impl: NoTranslation
     max_addr: 2147483648
-              
+
 
 MemorySystem:
   impl: GenericDRAM
