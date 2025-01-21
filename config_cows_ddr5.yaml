@@ -7,16 +7,31 @@ Frontend:
   num_expected_insts: 100000000
 #  num_expected_insts: 1000000 # testing
   traces:
-  - trace-in-memory-analytics-core-1:126
-#  - rand-read-trace
-#  - seq-read-trace
-#  - example_inst.trace
+  - trace-in-memory-analytics-core-1:0
+  - trace-in-memory-analytics-core-1:1
+  - trace-in-memory-analytics-core-1:2
+  - trace-in-memory-analytics-core-1:3
+  - trace-in-memory-analytics-core-1:4
+  - trace-in-memory-analytics-core-1:5
+  - trace-in-memory-analytics-core-1:6
+  - trace-in-memory-analytics-core-1:7
+  - trace-in-memory-analytics-core-1:8
+  - trace-in-memory-analytics-core-1:9
+  - trace-in-memory-analytics-core-1:10
+  - trace-in-memory-analytics-core-1:11
+  - trace-in-memory-analytics-core-1:12
+  - trace-in-memory-analytics-core-1:13
+  - trace-in-memory-analytics-core-1:14
+  - trace-in-memory-analytics-core-1:15
 
   llc_latency: 50
   llc_linesize: 64
   llc_associativity: 8
   llc_num_mshr_per_core: 16
   llc_capacity_per_core: 4MB
+
+  cows_fixed_dram_latency: 0
+  cows_force_lookup_on_ASID_miss: false
 
   Translation:
 #    impl: RandomTranslation
