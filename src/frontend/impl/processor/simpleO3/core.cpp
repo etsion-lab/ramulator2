@@ -31,7 +31,7 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
       throw ConfigurationError("Bad ASID {} in trace_path {}!", asid, file_path_str);
   }
 
-  printf("Loading trace file %s with asid %ld (0x%lx)\n",
+  printf("# Loading trace file %s with asid %ld (0x%lx)\n",
          path_tokens[0].c_str(), asid, asid);
 
 
