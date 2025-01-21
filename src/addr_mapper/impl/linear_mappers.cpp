@@ -48,7 +48,7 @@ class LinearMapperBase : public IAddrMapper {
       m_col_bits_idx = m_num_levels - 1;
 
       for (size_t level = 0; level < m_addr_bits.size(); level++) {
-	  YOAV("m_addr_bits[%lu] = %d", level, m_addr_bits[level]);
+    	  YOAV(" m_addr_bits[%lu] = %d", level, m_addr_bits[level]);
       }
 
     }
@@ -114,7 +114,7 @@ class RoBaRaCoCh final : public LinearMapperBase, public Implementation {
 
     void apply(Request& req) override {
       int64_t orig_addr = (int64_t)req.addr;
-      
+
       req.addr_vec.resize(m_num_levels, -1);
       Addr_t addr = req.addr >> m_tx_offset;
       req.addr_vec[0] = slice_lower_bits(addr, m_addr_bits[0]);
@@ -147,7 +147,7 @@ class MOP4CLXOR final : public LinearMapperBase, public Implementation {
       req.addr_vec[m_col_bits_idx] += slice_lower_bits(addr, m_addr_bits[m_col_bits_idx]-2) << 2;
       req.addr_vec[m_row_bits_idx] = (int) addr;
 
-      int row_xor_index = 0; 
+      int row_xor_index = 0;
       for (int lvl = 0 ; lvl < m_col_bits_idx ; lvl++){
         if (m_addr_bits[lvl] > 0){
           int mask = (req.addr_vec[m_col_bits_idx] >> row_xor_index) & ((1<<m_addr_bits[lvl])-1);

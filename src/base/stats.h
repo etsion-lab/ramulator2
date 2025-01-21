@@ -14,8 +14,8 @@
 #include <cstdio>
 #define YOAV(fmt...)				\
     do {					\
-	printf("YOAV: " fmt);			\
-	printf("\n");				\
+      	printf("# YOAV: " fmt);			\
+	      printf("\n");				\
     } while(0)
 
 namespace Ramulator {
@@ -60,23 +60,23 @@ class StatWrapper : public StatWrapperBase {
     StatWrapper(T& val, const Implementation& impl, Stats& stats) : _ref(&val), _impl(impl), _stats(stats) {};
     StatWrapper(std::vector<T>& val, const Implementation& impl, Stats& stats) : _ref(&val), _impl(impl), _stats(stats) {};
 
-    StatWrapper& name(std::string name) { 
-	_name = name; 
+    StatWrapper& name(std::string name) {
+	_name = name;
       if (auto it = _stats._registry.find(name); it != _stats._registry.end()) {
-        throw ConfigurationError("Stat {} of implementation is already registered!", name);    
+        throw ConfigurationError("Stat {} of implementation is already registered!", name);
       }
       _stats._registry[name] = this;
-      return *this; 
+      return *this;
     };
     template <typename... Args>
-    StatWrapper& name(fmt::format_string<Args...> format_str, Args&&... args) { 
+    StatWrapper& name(fmt::format_string<Args...> format_str, Args&&... args) {
       return name(fmt::format(format_str, std::forward<Args>(args)...));
     };
-    
+
     StatWrapper& desc(std::string desc) { _desc = desc; return *this; };
 
     void emit_to(YAML::Emitter& emitter) override {
-	
+
       if        (std::holds_alternative<T*>(_ref)) {
         emitter << YAML::Key << _name;
         emitter << YAML::Value << *(std::get<T*>(_ref));
