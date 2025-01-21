@@ -27,20 +27,27 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     bool ready = false;   // Whether this line is ready (i.e., is still inflight?)
   };
 
+  struct CoWs_config {
+    CoWs_config() : fixed_dram_latency(0), force_lookup_on_ASID_miss(false) {}
+
+    int fixed_dram_latency;
+    bool force_lookup_on_ASID_miss;
+  };
+
   private:
     using CacheSet_t = std::list<Line>;   // LRU queue for the set. The head of the list is the least-recently-used way.
     std::unordered_map<int, CacheSet_t> m_cache_sets;
-    
+
     using MSHREntry_t = std::pair<Addr_t, CacheSet_t::iterator>;
     using MSHR_t = std::vector<MSHREntry_t>;
     MSHR_t m_mshrs;
     std::unordered_map<Addr_t, std::vector<Request>> m_receive_requests;
 
-    // Request that miss in the LLC with the clock cycle (current cycle + llc latency) that they 
+    // Request that miss in the LLC with the clock cycle (current cycle + llc latency) that they
     // should be sent to the memory system
     std::list<std::pair<Clk_t, Request>> m_miss_list;
 
-    // Request that hit in the LLC with the clock cycle (current cycle + llc latency) that they 
+    // Request that hit in the LLC with the clock cycle (current cycle + llc latency) that they
     // should be sent back to the core (calls the callback)
     std::list<std::pair<Clk_t, Request>> m_hit_list;
 
@@ -51,6 +58,7 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
 
   public:
     int m_latency;
+    CoWs_config m_cows;
 
     size_t m_size_bytes;
     size_t m_linesize_bytes;
@@ -69,12 +77,12 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int s_llc_write_misses = 0;
     int s_llc_eviction = 0;
     int s_llc_mshr_unavailable = 0;
-    
+
 
   public:
-    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs);
+    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWs_config& cows_config);
     void connect_memory_system(IMemorySystem* memory_system) { m_memory_system = memory_system; };
-    
+
     void tick();
     bool send(Request req);
     void receive(Request& req);
@@ -87,6 +95,8 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int get_index(Addr_t addr)  { return (addr >> m_index_offset) & m_index_mask; };
     Addr_t get_tag(Addr_t addr) { return (addr >> m_tag_offset); };
     Addr_t align(Addr_t addr)   { return (addr & ~(m_linesize_bytes-1l)); };
+
+  int cows_added_dram_latency(Addr_t addr) { return m_cows.fixed_dram_latency; }
 
     CacheSet_t& get_set(Addr_t addr);
     CacheSet_t::iterator allocate_line(CacheSet_t& set, Addr_t addr);

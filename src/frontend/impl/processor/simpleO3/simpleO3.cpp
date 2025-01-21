@@ -27,7 +27,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
   public:
     void init() override {
       m_clock_ratio = param<uint>("clock_ratio").required();
-      
+
       // Core params
       std::vector<std::string> trace_list = param<std::vector<std::string>>("traces").desc("A list of traces.").required();
       m_num_cores = trace_list.size();
@@ -42,6 +42,10 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       int llc_capacity_per_core = parse_capacity_str(param<std::string>("llc_capacity_per_core").desc("LLC capacity per core.").default_val("2MB"));
       int llc_num_mshr_per_core = param<int>("llc_num_mshr_per_core").desc("Number of LLC MSHR entries per core.").default_val(16);
 
+      SimpleO3LLC::CoWs_config cows;
+      cows.fixed_dram_latency = param<int>("cows_fixed_dram_latency").desc("Fixed DRAM latency for COWs mapping lookup.").required();
+      cows.force_lookup_on_ASID_miss = param<bool>("cows_force_lookup_on_ASID_miss").desc("Force COWs lookup on ASID miss to hide cached entry.").required();
+
       // Simulation parameters
       m_num_expected_insts = param<int>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
 
@@ -49,7 +53,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       m_translation = create_child_ifce<ITranslation>();
 
       // Create the LLC
-      m_llc = new SimpleO3LLC(llc_latency, llc_capacity_per_core * m_num_cores, llc_linesize_bytes, llc_associativity, llc_num_mshr_per_core * m_num_cores);
+      m_llc = new SimpleO3LLC(llc_latency, llc_capacity_per_core * m_num_cores, llc_linesize_bytes, llc_associativity, llc_num_mshr_per_core * m_num_cores, cows);
       // m_llc->deserialize(serialization_filename);
       // m_llc->serialize(serialization_filename);
 
@@ -70,7 +74,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       register_stat(m_llc->s_llc_read_misses).name("llc_read_misses");
       register_stat(m_llc->s_llc_write_misses).name("llc_write_misses");
       register_stat(m_llc->s_llc_mshr_unavailable).name("llc_mshr_unavailable");
-      
+
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
         // register_stat(m_cores[core_id]->s_insts_retired).name("cycles_retired_core_{}", core_id);
         register_stat(m_cores[core_id]->s_cycles_recorded).name("cycles_recorded_core_{}", core_id);
