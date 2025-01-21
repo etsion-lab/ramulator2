@@ -17,7 +17,7 @@ namespace fs = std::filesystem;
 SimpleO3Core::Trace::Trace(std::string file_path_str) {
   // search for app ID
   std::vector<std::string> path_tokens;
-  int64_t app_id = 0x0;
+  int64_t asid = 0x0;
 
   tokenize(path_tokens, file_path_str, ":");
   auto num_path_tokens = path_tokens.size();
@@ -26,13 +26,14 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
     throw ConfigurationError("Badly formatted trace path {}!", file_path_str);
   }
   if(num_path_tokens == 2) {
-    app_id = std::stoll(path_tokens[1]);
-    if(app_id < 0 || app_id > 127)
-      throw ConfigurationError("Bad application ID {} in trace_path {}!", app_id, file_path_str);
-
-    printf("str=%s, path=%s, app_id=%ld (0x%lx)\n",
-          file_path_str.c_str(), path_tokens[0].c_str(), app_id, app_id);
+    asid = std::stoll(path_tokens[1]);
+    if(!is_valid_asid(asid))
+      throw ConfigurationError("Bad ASID {} in trace_path {}!", asid, file_path_str);
   }
+
+  printf("Loading trace file %s with asid %ld (0x%lx)\n",
+         path_tokens[0].c_str(), asid, asid);
+
 
   fs::path trace_path(path_tokens[0]);
   if (!fs::exists(trace_path)) {
@@ -61,14 +62,14 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
     int bubble_count = std::stoi(tokens[0]);
 
     Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
-    assert((load_addr >> APP_ID_OFFSET) == 0);
-    load_addr |= (app_id << APP_ID_OFFSET); // add APP ID to the address
+    assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
+    load_addr = addr_set_asid(load_addr, asid); // add ASID to the address
 
     bool has_store = num_tokens == 2 ? false : true;
     if (has_store) {
       Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
-      assert((store_addr >> APP_ID_OFFSET) == 0);
-      store_addr |= (app_id << APP_ID_OFFSET);  // add APP ID to the address
+      assert(addr_get_asid(store_addr) == 0);
+      store_addr = addr_set_asid(store_addr, asid);  // add ASID to the address
 
       m_trace.push_back({bubble_count, load_addr, store_addr});
     } else {

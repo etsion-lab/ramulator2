@@ -16,8 +16,6 @@ class SimpleO3LLC;
 class SimpleO3Core : public Clocked<SimpleO3Core> {
   friend class SimpleO3;
   class Trace {
-    // Bit offset of the App ID in the physical address
-    const uint8_t APP_ID_OFFSET = 56;
 
     friend class SimpleO3Core;
     struct Inst {
