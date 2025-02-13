@@ -3,7 +3,7 @@
 
 namespace Ramulator {
 
-SimpleO3LLC::SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWs_config& cows_config):
+SimpleO3LLC::SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWsCache::Config& cows_config):
 m_latency(latency), m_cows(cows_config), m_size_bytes(size_bytes), m_linesize_bytes(linesize_bytes), m_associativity(associativity), m_num_mshrs(num_mshrs) {
   m_logger = Logging::create_logger("SimpleO3LLC");
 

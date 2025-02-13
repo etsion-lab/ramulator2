@@ -42,9 +42,12 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       int llc_capacity_per_core = parse_capacity_str(param<std::string>("llc_capacity_per_core").desc("LLC capacity per core.").default_val("2MB"));
       int llc_num_mshr_per_core = param<int>("llc_num_mshr_per_core").desc("Number of LLC MSHR entries per core.").default_val(16);
 
-      SimpleO3LLC::CoWs_config cows;
+      CoWsCache::Config cows;
       cows.fixed_dram_latency = param<int>("cows_fixed_dram_latency").desc("Fixed DRAM latency for COWs mapping lookup.").required();
       cows.force_lookup_on_ASID_miss = param<bool>("cows_force_lookup_on_ASID_miss").desc("Force COWs lookup on ASID miss to hide cached entry.").required();
+      cows.llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
+      cows.assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
+      cows.dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
 
       // Simulation parameters
       m_num_expected_insts = param<int>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();

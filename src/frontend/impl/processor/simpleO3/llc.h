@@ -12,6 +12,7 @@
 #include "base/type.h"
 #include "base/request.h"
 #include "memory_system/memory_system.h"
+#include "cows_cache.h"
 
 namespace Ramulator {
 
@@ -25,13 +26,6 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     Addr_t tag = -1;
     bool dirty = false;
     bool ready = false;   // Whether this line is ready (i.e., is still inflight?)
-  };
-
-  struct CoWs_config {
-    CoWs_config() : fixed_dram_latency(0), force_lookup_on_ASID_miss(false) {}
-
-    int fixed_dram_latency;
-    bool force_lookup_on_ASID_miss;
   };
 
   private:
@@ -58,7 +52,7 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
 
   public:
     int m_latency;
-    CoWs_config m_cows;
+    CoWsCache::Config m_cows;
 
     size_t m_size_bytes;
     size_t m_linesize_bytes;
@@ -80,7 +74,7 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
 
 
   public:
-    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWs_config& cows_config);
+    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWsCache::Config& cows_config);
     void connect_memory_system(IMemorySystem* memory_system) { m_memory_system = memory_system; };
 
     void tick();
