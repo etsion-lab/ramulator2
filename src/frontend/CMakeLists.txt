@@ -11,6 +11,7 @@ target_sources(
   impl/processor/simpleO3/core.h      impl/processor/simpleO3/core.cpp
   impl/processor/simpleO3/llc.h       impl/processor/simpleO3/llc.cpp
   impl/processor/simpleO3/trace.h     impl/processor/simpleO3/trace.cpp
+  impl/processor/simpleO3/cows_cache.h     impl/processor/simpleO3/cows_cache.cpp
 
   impl/processor/bhO3/bhO3.h      impl/processor/bhO3/bhO3.cpp
   impl/processor/bhO3/bhcore.h    impl/processor/bhO3/bhcore.cpp
