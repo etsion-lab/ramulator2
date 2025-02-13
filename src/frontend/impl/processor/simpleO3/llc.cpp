@@ -3,8 +3,8 @@
 
 namespace Ramulator {
 
-SimpleO3LLC::SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWsCache::Config& cows_config):
-m_latency(latency), m_cows(cows_config), m_size_bytes(size_bytes), m_linesize_bytes(linesize_bytes), m_associativity(associativity), m_num_mshrs(num_mshrs) {
+SimpleO3LLC::SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, CoWsCache* cows_cache):
+m_latency(latency), m_cows_cache(cows_cache), m_size_bytes(size_bytes), m_linesize_bytes(linesize_bytes), m_associativity(associativity), m_num_mshrs(num_mshrs) {
   m_logger = Logging::create_logger("SimpleO3LLC");
 
   m_set_size = m_size_bytes / (m_linesize_bytes * m_associativity);
@@ -78,6 +78,9 @@ bool SimpleO3LLC::send(Request req) {
     set.push_back({req.addr, get_tag(req.addr), line_it->dirty || (req.type_id == Request::Type::Write), true});
     set.erase(line_it);
 
+    // Yoav: update cows cache on hit
+    m_cows_cache->llc_hit(req.addr);
+
     // Add to the hit list to callback when finished
     m_hit_list.push_back(std::make_pair(m_clk + m_latency, req));
     return true;
@@ -149,8 +152,18 @@ bool SimpleO3LLC::send(Request req) {
     std::vector<Request> _req_v{req};
     m_receive_requests[req.addr] = _req_v;
 
+    // Yoav: is the dram page translation available in the cows cache?
+    CoWsCache::Line* line;
+    uint32_t cows_dram_latency = 0;
+    if(!m_cows_cache->lookup(req.addr, line)) {
+      // insert the block
+      m_cows_cache->insert(req.addr, 0x12345678deafbeefUL);
+      // need to look up the block
+      cows_dram_latency = m_cows_cache->get_dram_latency_on_translation(req.addr);
+    }
+
     // Add to the miss request list
-    m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_added_dram_latency(req.addr), req));
+    m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_dram_latency, req));
 
     return true;
   }
@@ -217,9 +230,15 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
   // Generate writeback request if victim line is dirty
   if (victim_it->dirty) {
     Request writeback_req(victim_it->addr, Request::Type::Write);
-    m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_added_dram_latency(victim_it->addr), writeback_req));
+    m_miss_list.push_back(std::make_pair(m_clk + m_latency, writeback_req));
 
     DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "Writeback Request will be issued at Clk={}.", m_clk + m_latency);
+  }
+
+  // Yoav: update cows cache on eviction
+  uint32_t cnt = m_cows_cache->llc_evict(victim_it->addr);
+  if(cnt == 0) {
+    m_cows_cache->erase(victim_it->addr);
   }
 
   set.erase(victim_it);

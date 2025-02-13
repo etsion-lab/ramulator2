@@ -52,7 +52,7 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
 
   public:
     int m_latency;
-    CoWsCache::Config m_cows;
+    CoWsCache* m_cows_cache;
 
     size_t m_size_bytes;
     size_t m_linesize_bytes;
@@ -74,7 +74,7 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
 
 
   public:
-    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, const CoWsCache::Config& cows_config);
+    SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, CoWsCache* cows_cache);
     void connect_memory_system(IMemorySystem* memory_system) { m_memory_system = memory_system; };
 
     void tick();
@@ -89,8 +89,6 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int get_index(Addr_t addr)  { return (addr >> m_index_offset) & m_index_mask; };
     Addr_t get_tag(Addr_t addr) { return (addr >> m_tag_offset); };
     Addr_t align(Addr_t addr)   { return (addr & ~(m_linesize_bytes-1l)); };
-
-  int cows_added_dram_latency(Addr_t addr) { return m_cows.fixed_dram_latency; }
 
     CacheSet_t& get_set(Addr_t addr);
     CacheSet_t::iterator allocate_line(CacheSet_t& set, Addr_t addr);

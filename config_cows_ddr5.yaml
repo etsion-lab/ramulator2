@@ -4,8 +4,8 @@ Frontend:
   inst_window_depth: 200
   clock_ratio: 1
 #  num_expected_insts: 1600000000
-  num_expected_insts: 100000000
-#  num_expected_insts: 1000000 # testing
+#  num_expected_insts: 100000000
+  num_expected_insts: 1000000 # testing
   traces:
   - trace-in-memory-analytics-core-1:0
   - trace-in-memory-analytics-core-1:1
@@ -30,8 +30,7 @@ Frontend:
   llc_num_mshr_per_core: 16
   llc_capacity_per_core: 4MB
 
-  cows_fixed_dram_latency: 0
-  cows_force_lookup_on_ASID_miss: false
+  cows_dram_latency_on_translation: 0
   cows_cache2llc_ratio: 1
   cows_cache_assoc: 8
   dram_page_bytes: 8KB

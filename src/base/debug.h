@@ -7,13 +7,20 @@
 
 #include "base/logging.h"
 
+#define DBG(args...) \
+do { \
+  fprintf(stderr, "DBG[%s:%d]: ", __FILE__, __LINE__);\
+  fprintf(stderr, args); \
+  fprintf(stderr, "\n"); \
+} while(0)
+
 namespace Ramulator {
 
 namespace Debug {
 
 /**
  * @brief       Type trait for debug flags
- * 
+ *
  */
 template <class T>
 inline constexpr bool is_debug_enabled = std::false_type::value;

@@ -18,6 +18,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
     int m_num_cores = -1;
     std::vector<SimpleO3Core*> m_cores;
     SimpleO3LLC* m_llc;
+    CoWsCache* m_cows_cache;
 
     size_t m_num_expected_insts = 0;
 
@@ -42,12 +43,10 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       int llc_capacity_per_core = parse_capacity_str(param<std::string>("llc_capacity_per_core").desc("LLC capacity per core.").default_val("2MB"));
       int llc_num_mshr_per_core = param<int>("llc_num_mshr_per_core").desc("Number of LLC MSHR entries per core.").default_val(16);
 
-      CoWsCache::Config cows;
-      cows.fixed_dram_latency = param<int>("cows_fixed_dram_latency").desc("Fixed DRAM latency for COWs mapping lookup.").required();
-      cows.force_lookup_on_ASID_miss = param<bool>("cows_force_lookup_on_ASID_miss").desc("Force COWs lookup on ASID miss to hide cached entry.").required();
-      cows.llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
-      cows.assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
-      cows.dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
+      uint32_t dram_latency_on_translation = param<int>("cows_dram_latency_on_translation").desc("DRAM latency for COWs mapping translations.").required();
+      uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
+      uint32_t assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
+      uint32_t dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
 
       // Simulation parameters
       m_num_expected_insts = param<int>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
@@ -55,8 +54,17 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       // Create address translation module
       m_translation = create_child_ifce<ITranslation>();
 
+      // Create CoWsCache
+      assert(llc2cows_ratio == 1);
+      uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
+      m_cows_cache = new CoWsCache(llc_nlines,
+                                   assoc,
+                                   llc_linesize_bytes,
+                                   dram_page_bytes,
+                                   dram_latency_on_translation);
+
       // Create the LLC
-      m_llc = new SimpleO3LLC(llc_latency, llc_capacity_per_core * m_num_cores, llc_linesize_bytes, llc_associativity, llc_num_mshr_per_core * m_num_cores, cows);
+      m_llc = new SimpleO3LLC(llc_latency, llc_capacity_per_core * m_num_cores, llc_linesize_bytes, llc_associativity, llc_num_mshr_per_core * m_num_cores, m_cows_cache);
       // m_llc->deserialize(serialization_filename);
       // m_llc->serialize(serialization_filename);
 
