@@ -32,6 +32,9 @@ Frontend:
 
   cows_fixed_dram_latency: 0
   cows_force_lookup_on_ASID_miss: false
+  cows_cache2llc_ratio: 1
+  cows_cache_assoc: 8
+  dram_page_bytes: 8KB
 
   Translation:
 #    impl: RandomTranslation
