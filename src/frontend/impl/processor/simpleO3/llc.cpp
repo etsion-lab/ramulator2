@@ -154,13 +154,15 @@ bool SimpleO3LLC::send(Request req) {
 
     // Yoav: is the dram page translation available in the cows cache?
     CoWsCache::Line* line;
-    uint32_t cows_dram_latency = 0;
+    uint32_t cows_dram_latency = m_cows_cache->get_access_latency();
     if(!m_cows_cache->lookup(req.addr, line)) {
       // insert the block
       m_cows_cache->insert(req.addr, 0x12345678deafbeefUL);
-      // need to look up the block
-      cows_dram_latency = m_cows_cache->get_dram_latency_on_translation(req.addr);
+      // need to look up the block, so pay for translation
+      cows_dram_latency += m_cows_cache->get_dram_latency_on_translation(req.addr);
     }
+    // we know the page in the cows cache. add the block to the bitmap
+    m_cows_cache->llc_miss(req.addr);
 
     // Add to the miss request list
     m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_dram_latency, req));
