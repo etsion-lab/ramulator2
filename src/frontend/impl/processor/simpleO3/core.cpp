@@ -147,6 +147,23 @@ void SimpleO3Core::tick() {
   m_clk++;
 
   s_insts_retired += m_window.retire();
+
+  if(m_id == 0) {
+    const uint32_t PRINT_EVERY_INSTS = 1000000;
+    static uint64_t last_printed_insts = 0;
+    static uint64_t prev_insts_retired = 0;
+    static uint64_t prev_clk = 0;
+    if(s_insts_retired > last_printed_insts + PRINT_EVERY_INSTS) {
+      auto insts = s_insts_retired - prev_insts_retired;
+      auto cycle = m_clk - prev_clk;
+      fprintf(stderr, "Core %u retired %lu insts in %lu cycles (curr ipc=%.3f).\n  ",
+              m_id, s_insts_retired, m_clk, (1.0f*insts)/cycle);
+      last_printed_insts += PRINT_EVERY_INSTS;
+      prev_insts_retired = s_insts_retired;
+      prev_clk = m_clk;
+    }
+  }
+
   if (!reached_expected_num_insts) {
     if (s_insts_retired >= m_num_expected_insts) {
       reached_expected_num_insts = true;
