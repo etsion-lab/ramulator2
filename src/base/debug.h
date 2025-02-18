@@ -7,12 +7,16 @@
 
 #include "base/logging.h"
 
+#ifdef DEBUG_COWS
 #define DBG(args...) \
 do { \
   fprintf(stderr, "DBG[%s:%d]: ", __FILE__, __LINE__);\
   fprintf(stderr, args); \
   fprintf(stderr, "\n"); \
 } while(0)
+#else
+#define DBG(args...) do { } while(0)
+#endif
 
 namespace Ramulator {
 
