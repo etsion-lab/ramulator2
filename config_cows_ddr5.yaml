@@ -56,7 +56,7 @@ MemorySystem:
     org:
 #      preset: DDR5_32Gb_x8
       preset: DDR5_64Gb_x8
-      channel: 1
+      channel: 12
       rank: 2
     timing:
 #      preset: DDR5_3200C
@@ -73,7 +73,8 @@ MemorySystem:
     RefreshManager:
       impl: AllBank
     RowPolicy:
-      impl: ClosedRowPolicy
+#      impl: ClosedRowPolicy
+      impl: OpenRowPolicy
       cap: 1
 #      cap: 4
     plugins:
