@@ -75,6 +75,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       // m_llc->serialize(serialization_filename);
 
       // Create the cores
+      SimpleO3Core::Trace::dram_page_bytes = dram_page_bytes;
       for (int id = 0; id < m_num_cores; id++) {
         SimpleO3Core* core = new SimpleO3Core(id, ipc, depth, m_num_expected_insts, trace_list[id], m_translation, m_llc);
         core->m_callback = [this](Request& req){return this->receive(req);} ;

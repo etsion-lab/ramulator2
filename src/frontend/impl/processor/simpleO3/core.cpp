@@ -14,6 +14,9 @@ namespace Ramulator {
 
 namespace fs = std::filesystem;
 
+uint32_t SimpleO3Core::Trace::dram_page_bytes = 8192;
+
+
 SimpleO3Core::Trace::Trace(std::string file_path_str) {
   // search for app ID
   std::vector<std::string> path_tokens;
@@ -62,12 +65,14 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
     int bubble_count = std::stoi(tokens[0]);
 
     Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
+    load_addr += get_aslr_offset(asid);
     assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
     load_addr = addr_set_asid(load_addr, asid); // add ASID to the address
 
     bool has_store = num_tokens == 2 ? false : true;
     if (has_store) {
       Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
+      store_addr += get_aslr_offset(asid);
       assert(addr_get_asid(store_addr) == 0);
       store_addr = addr_set_asid(store_addr, asid);  // add ASID to the address
 

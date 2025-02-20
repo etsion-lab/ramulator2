@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <functional>
+#include <random>
 
 #include "base/type.h"
 #include "base/request.h"
@@ -31,6 +32,26 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     public:
       Trace(std::string file_path_str);
       const Inst& get_next_inst();
+
+      // singleton for a global ASLR DB
+      static uint32_t dram_page_bytes;
+      static uint64_t get_aslr_offset(uint64_t asid)
+      {
+        static std::unordered_map<uint64_t, uint64_t> asid_db;
+        static std::mt19937 gen(1234);
+        static std::uniform_int_distribution<> distrib(1, 1000);
+
+        if(auto it = asid_db.find(asid); it != asid_db.end()) {
+          return it->second;
+        }
+
+        // generate new offset
+        uint64_t page_count = distrib(gen);
+        uint64_t offset = dram_page_bytes * page_count;
+        asid_db[asid]=offset;
+
+        return offset;
+      }
   };
 
   /**
