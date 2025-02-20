@@ -73,9 +73,10 @@ MemorySystem:
     RefreshManager:
       impl: AllBank
     RowPolicy:
-#      impl: ClosedRowPolicy
-      impl: OpenRowPolicy
-      cap: 1
+      impl: ClosedRowPolicy
+#      impl: OpenRowPolicy
+      cap: 8
+#      cap: 16 #almost as good as open policy
 #      cap: 4
     plugins:
 
