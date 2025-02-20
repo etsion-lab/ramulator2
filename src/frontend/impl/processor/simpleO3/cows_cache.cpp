@@ -145,7 +145,7 @@ void CoWsCache::fini()
     if(m_stats.stats_fname.size() == 0) // no stats
         return;
 
-    auto of = std::ofstream(m_stats.stats_fname);
+    auto of = std::ofstream(m_stats.stats_fname + ".frac-of-entries");
 
     std::cout<<"# Dumping CoWs stats"<<std::endl;
     of<<"# CoWs stats"<<std::endl;
