@@ -7,6 +7,7 @@
 
 #include "base/exception.h"
 #include "base/utils.h"
+#include "base/popen_istream.h"
 #include "frontend/impl/processor/simpleO3/core.h"
 #include "frontend/impl/processor/simpleO3/llc.h"
 
@@ -43,10 +44,16 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
     throw ConfigurationError("Trace {} does not exist!", file_path_str);
   }
 
+#if 0
   std::ifstream trace_file(trace_path);
   if (!trace_file.is_open()) {
     throw ConfigurationError("Trace {} cannot be opened!", file_path_str);
   }
+#else
+  const std::string IN_UTIL = "zstdcat";
+  std::string in_cmd = IN_UTIL + " " + path_tokens[0];
+  PopenIstream trace_file(in_cmd);
+#endif
 
   std::string line;
   std::regex comment_regex(" *#.*$");
