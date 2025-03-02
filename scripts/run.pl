@@ -84,8 +84,6 @@ sub build_trace_list {
 sub gen_config($$$) {
     (my $in, my $out, my $map) = @_;
 
-    print("in=$in, out=$out\n");
-
     open(my $fin, '<', $in) or die "Could not open input config file $in: $!";
     open(my $fout, '>', $out) or die "Could not open input config file $out: $!";
 
@@ -121,9 +119,11 @@ sub gen_config($$$) {
 my @benchs;
 my $test_name;
 my $confile;
+my $rundir_prefix;
 
 GetOptions ("bench=s" => \@benchs,
             "name=s" => \$test_name,
+            "dir=s" => \$rundir_prefix,
             "config=s" => \$confile)
     or die("Error in command line arguments\n");
 
@@ -136,10 +136,18 @@ my %macros;
 
 # create rundir
 my $rundir = "$RESDIR/$test_name";
+$rundir = "$RESDIR/$rundir_prefix/$test_name" if(defined($rundir_prefix));
 system("mkdir -p $rundir");
 
 # create config file
 my $outconf = "$rundir/config";
 gen_config($confile, $outconf, \%macros);
 
-system("cd $rundir && /usr/bin/time -v $BINARY -f $outconf > out");
+#my $cmd="/usr/bin/time -v $BINARY -f $outconf 2>&1 > out";
+my $cmd="/usr/bin/time -v $BINARY -f $outconf";
+
+print "Changing dir to: $rundir\n";
+chdir $rundir;
+
+print "Running command: $cmd\n";
+system($cmd);
