@@ -6,11 +6,36 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
 
 #include "cows_cache.h"
 
 
 namespace Ramulator {
+
+std::string
+CoWsCache::Line::toString() const
+{
+    std::ostringstream oss;
+
+    uint64_t lo=0;
+    uint64_t hi=0;
+
+    for(uint64_t i=0; i<64; i++)
+        lo |= (block_map[i]) ? 0x1 : 0x0;
+
+    for(uint64_t i=64; i<127; i++)
+        hi |= (block_map[i]) ? 0x1 : 0x0;
+
+    oss<<"page_phys_addr=0x"<<std::hex<<page_phys_addr
+        <<", "<<"valid="<<valid
+        <<", map=0x"
+        << std::setfill('0') << std::setw(8) << std::right << std::hex << hi << "_"
+        << std::setfill('0') << std::setw(8) << std::right << std::hex << lo;
+
+    return oss.str();
+}
 
 CoWsCache::CoWsCache(uint32_t nlines,
                      uint32_t assoc,
@@ -58,10 +83,21 @@ bool CoWsCache::lookup(Addr_t baddr, Line*& ret)
 
 void CoWsCache::insert(Addr_t page_addr, Addr_t real_phys_addr)
 {
+#if 0 /* debug */
+    if(m_perfect_cache.find(page_addr) != m_perfect_cache.end()) {
+        auto it = m_perfect_cache.find(page_addr);
+        std::cerr<<">>>>>> key=0x"<<std::hex<<it->first
+                 <<", val="<<it->second.toString()
+                 <<std::endl;
+    }
+#endif
+
     assert(m_perfect_cache.find(page_addr) == m_perfect_cache.end()); // make sure page is not already in the cache
 
     // insert new line and set mapping
     Line& line = m_perfect_cache[page_addr];
+    line.setPageAddr(page_addr);
+    line.setValid(true);
     line.setRealAddr(real_phys_addr);
 }
 
@@ -70,7 +106,11 @@ void CoWsCache::erase(Addr_t baddr)
     Addr_t page_addr = get_page_addr(baddr);
     assert(m_perfect_cache.find(page_addr) != m_perfect_cache.end()); // make sure page is already in the cache
 
-    m_perfect_cache.erase(page_addr);
+    // poison the Line before erasing it
+    auto it = m_perfect_cache.find(page_addr);
+    it->second.setValid(false);
+    it->second.setPageAddr(0xdeadbeef12345678L);
+    m_perfect_cache.erase(it);
 }
 
 // this function is here as a placeholder for collecting statistics
@@ -106,6 +146,8 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr)
         // update stats
         uint32_t lines_in_cows = (uint32_t)m_perfect_cache.size();
         m_cows2llc_valid.push_back({lines_in_cows, m_lines_in_llc});
+
+        miss_latency += get_dram_latency_on_translation(page_addr);
     }
     it->second.setBlockID(block_id, true);
 

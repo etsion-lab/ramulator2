@@ -23,7 +23,6 @@ public:
         std::string stats_fname;
     };
 
-
     class Line {
         const uint32_t MAX_BLOCKS_PER_PAGE = 8192/64;
 
@@ -40,6 +39,18 @@ public:
 
             Addr_t getPageAddr() const {
                 return page_phys_addr;
+            }
+
+            void setPageAddr(Addr_t page_addr) {
+                page_phys_addr = page_addr;
+            }
+
+            void setValid(bool v) {
+                valid = v;
+            }
+
+            bool getValid() const {
+                return valid;
             }
 
             bool getBlockID(uint32_t block_id) const {
@@ -60,7 +71,9 @@ public:
 
             Addr_t getRealAddr() { return real_page_phys_addr; }
             void setRealAddr(Addr_t addr) { real_page_phys_addr = addr; }
-    };
+
+            std::string toString() const;
+        };
 
 private:
     const uint32_t m_nlines;
