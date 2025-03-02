@@ -43,6 +43,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       int llc_capacity_per_core = parse_capacity_str(param<std::string>("llc_capacity_per_core").desc("LLC capacity per core.").default_val("2MB"));
       int llc_num_mshr_per_core = param<int>("llc_num_mshr_per_core").desc("Number of LLC MSHR entries per core.").default_val(16);
 
+      uint32_t cows_enable = param<bool>("cows_enable").desc("Enable CoWs.").required();
       uint32_t dram_latency_on_translation = param<int>("cows_dram_latency_on_translation").desc("DRAM latency for COWs mapping translations.").required();
       uint32_t cows_cache_access_latency = param<int>("cows_cache_access_latency").desc("No. of cycles to access the CoWs cache.").required();
       uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
@@ -59,15 +60,20 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       m_translation = create_child_ifce<ITranslation>();
 
       // Create CoWsCache
-      assert(llc2cows_ratio == 1);
-      uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
-      m_cows_cache = new CoWsCache(llc_nlines,
-                                   assoc,
-                                   llc_linesize_bytes,
-                                   dram_page_bytes,
-                                   cows_cache_access_latency,
-                                   dram_latency_on_translation,
-                                   cows_stats);
+      m_cows_cache = nullptr;
+      if(cows_enable) {
+        uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
+        uint32_t cows_nlines = llc_nlines / llc2cows_ratio;
+        // cows line number must be a multiple of its assoc
+        cows_nlines -= cows_nlines % assoc;
+        m_cows_cache = new CoWsCache(cows_nlines,
+                                    assoc,
+                                    llc_linesize_bytes,
+                                    dram_page_bytes,
+                                    cows_cache_access_latency,
+                                    dram_latency_on_translation,
+                                    cows_stats);
+      }
 
       // Create the LLC
       m_llc = new SimpleO3LLC(llc_latency, llc_capacity_per_core * m_num_cores, llc_linesize_bytes, llc_associativity, llc_num_mshr_per_core * m_num_cores, m_cows_cache);
@@ -131,7 +137,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
           return false;
         }
       }
-      m_cows_cache->fini();
+      if(m_cows_cache != nullptr) {
+        m_cows_cache->fini();
+      }
 
       return true;
     }

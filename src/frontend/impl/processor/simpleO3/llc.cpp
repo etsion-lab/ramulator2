@@ -79,7 +79,8 @@ bool SimpleO3LLC::send(Request req) {
     set.erase(line_it);
 
     // Yoav: update cows cache on hit
-    m_cows_cache->llc_hit(req.addr);
+    if(m_cows_cache != nullptr)
+      m_cows_cache->llc_hit(req.addr);
 
     // Add to the hit list to callback when finished
     m_hit_list.push_back(std::make_pair(m_clk + m_latency, req));
@@ -153,16 +154,19 @@ bool SimpleO3LLC::send(Request req) {
     m_receive_requests[req.addr] = _req_v;
 
     // Yoav: is the dram page translation available in the cows cache?
-    CoWsCache::Line* line;
-    uint32_t cows_dram_latency = m_cows_cache->get_access_latency();
-    if(!m_cows_cache->lookup(req.addr, line)) {
-      // insert the block
-      m_cows_cache->insert(req.addr, 0x12345678deafbeefUL);
-      // need to look up the block, so pay for translation
-      cows_dram_latency += m_cows_cache->get_dram_latency_on_translation(req.addr);
+    uint32_t cows_dram_latency = 0;
+    if(m_cows_cache != nullptr) {
+      cows_dram_latency = m_cows_cache->get_access_latency();
+      CoWsCache::Line* line;
+      if(!m_cows_cache->lookup(req.addr, line)) {
+        // insert the block with a fake mapped address
+        m_cows_cache->insert(req.addr, req.addr + 1<<20);
+        // need to look up the block, so pay for translation
+        cows_dram_latency += m_cows_cache->get_dram_latency_on_translation(req.addr);
+      }
+      // we know the page in the cows cache. add the block to the bitmap
+      m_cows_cache->llc_miss(req.addr);
     }
-    // we know the page in the cows cache. add the block to the bitmap
-    m_cows_cache->llc_miss(req.addr);
 
     // Add to the miss request list
     m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_dram_latency, req));
@@ -238,9 +242,8 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
   }
 
   // Yoav: update cows cache on eviction
-  uint32_t cnt = m_cows_cache->llc_evict(victim_it->addr);
-  if(cnt == 0) {
-    m_cows_cache->erase(victim_it->addr);
+  if(m_cows_cache != nullptr) {
+    m_cows_cache->llc_evict(victim_it->addr);
   }
 
   set.erase(victim_it);

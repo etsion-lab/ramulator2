@@ -29,24 +29,25 @@ CoWsCache::CoWsCache(uint32_t nlines,
                 m_dram_latency_on_translation(dram_latency_on_translation),
                 m_dram_page_bit_offset(std::countr_zero(dram_page_bytes)),
                 m_dram_page_mask(~( (((Addr_t)1)<<m_dram_page_bit_offset) - 1) ),
-                m_set_mask((m_nsets-1)<<m_dram_page_bit_offset),
-                m_set_offset(m_dram_page_bit_offset),
                 m_lines_in_llc(0),
                 m_cows2llc_valid(),
-//                m_cache_sets(m_nsets, std::list<Line>())
-                m_cache()
-                {
-                    assert(is_power_of_2(nlines));
-                    assert(is_power_of_2(assoc));
-                    assert(is_power_of_2(m_cache_line_bytes));
-                    assert(is_power_of_2(m_dram_page_bytes));
-                }
+                m_perfect_cache(),
+                m_cache_sets(m_nsets, std::list<Line>())
+{
+
+    std::cerr<<"# Creating CoWsCache"<<std::endl;
+
+    assert(is_power_of_2(nlines));
+    assert(is_power_of_2(assoc));
+    assert(is_power_of_2(m_cache_line_bytes));
+    assert(is_power_of_2(m_dram_page_bytes));
+}
 
 bool CoWsCache::lookup(Addr_t baddr, Line*& ret)
 {
     Addr_t page_addr = get_page_addr(baddr);
-    auto it = m_cache.find(page_addr);
-    if(it == m_cache.end()) {
+    auto it = m_perfect_cache.find(page_addr);
+    if(it == m_perfect_cache.end()) {
         ret = nullptr;
         return false;
     }
@@ -55,69 +56,74 @@ bool CoWsCache::lookup(Addr_t baddr, Line*& ret)
     return true;
 }
 
-void CoWsCache::insert(Addr_t baddr, Addr_t real_phys_addr)
+void CoWsCache::insert(Addr_t page_addr, Addr_t real_phys_addr)
 {
-    Addr_t page_addr = get_page_addr(baddr);
-    uint32_t block_id = get_block_id(baddr);
-    assert(m_cache.find(page_addr) == m_cache.end()); // make sure page is not already in the cache
+    assert(m_perfect_cache.find(page_addr) == m_perfect_cache.end()); // make sure page is not already in the cache
 
-    DBG("INSERT: baddr=0x%lx, page_addr=0x%lx, block_id=0x%x",
-        baddr, page_addr, block_id);
-
-    // insert new line and set params
-    Line& line = m_cache[page_addr];
+    // insert new line and set mapping
+    Line& line = m_perfect_cache[page_addr];
     line.setRealAddr(real_phys_addr);
-    line.setBlockID(block_id, true);
-
-    miss_after_insert = true;
 }
 
 void CoWsCache::erase(Addr_t baddr)
 {
     Addr_t page_addr = get_page_addr(baddr);
-    assert(m_cache.find(page_addr) != m_cache.end()); // make sure page is already in the cache
+    assert(m_perfect_cache.find(page_addr) != m_perfect_cache.end()); // make sure page is already in the cache
 
-    m_cache.erase(page_addr);
+    m_perfect_cache.erase(page_addr);
 }
 
+// this function is here as a placeholder for collecting statistics
 void CoWsCache::llc_hit(Addr_t baddr)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
-    auto it = m_cache.find(page_addr);
+    auto it = m_perfect_cache.find(page_addr);
 
     // it's a hit, so the dram page must already be available in the cows cache
-    assert(it != m_cache.end());
+    assert(it != m_perfect_cache.end());
 
     // it's a hit, so the block must already be available in the cows cache
     assert(it->second.getBlockID(block_id));
 }
 
-void CoWsCache::llc_miss(Addr_t baddr)
+uint32_t CoWsCache::llc_miss(Addr_t baddr)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
-    auto it = m_cache.find(page_addr);
-
-    //  the page should already be in the cache
-    assert(it != m_cache.end());
-
-    DBG("MISS: baddr=0x%lx, page_addr=0x%lx, block_id=0x%x",
-        baddr, page_addr, block_id);
-
-    it->second.setBlockID(block_id, true);
+    // miss latency is at least a cows cache access latency
+    uint32_t miss_latency = m_access_latency;
 
     // update stats
     m_lines_in_llc++;
 
-    // just inserted this block? collect stats
-    if(miss_after_insert) {
-        // update stats
-        uint32_t lines_in_cows = (uint32_t)m_cache.size();
-        m_cows2llc_valid.push_back({lines_in_cows, m_lines_in_llc});
+    // first update the perfect cache
+    auto it = m_perfect_cache.find(page_addr);
+    if(it == m_perfect_cache.end()) {
+        insert(page_addr, page_addr + 1<<20);
+        it = m_perfect_cache.find(page_addr);
 
-        miss_after_insert = false;
+        // update stats
+        uint32_t lines_in_cows = (uint32_t)m_perfect_cache.size();
+        m_cows2llc_valid.push_back({lines_in_cows, m_lines_in_llc});
     }
+    it->second.setBlockID(block_id, true);
+
+    // now update the real cache
+    #if 0
+auto page_addr = get_page_addr(baddr);
+auto block_id = get_block_id(baddr);
+
+CacheSet_t& set = m_cache_sets[get_set_idx(page_addr)];
+line.setBlockID(block_id, true);
+auto line_it = find_in_set(set, page_addr);
+#endif
+
+
+    DBG("MISS: baddr=0x%lx, page_addr=0x%lx, block_id=0x%x",
+        baddr, page_addr, block_id);
+
+    return miss_latency;
 }
 
 uint32_t CoWsCache::llc_evict(Addr_t baddr)
@@ -125,8 +131,8 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr)
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
 
-    auto it = m_cache.find(page_addr);
-    assert(it != m_cache.end());
+    auto it = m_perfect_cache.find(page_addr);
+    assert(it != m_perfect_cache.end());
 
     DBG("EVICT: baddr=0x%lx, page_addr=0x%lx, block_id=0x%x",
         baddr, page_addr, block_id);
@@ -135,7 +141,14 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr)
     // update stats
     m_lines_in_llc--;
 
-    return it->second.getNumBlocks();
+    auto cnt = it->second.getNumBlocks();
+
+    // perfect cache: no more page lines in llc? evict
+    if(cnt == 0) {
+        erase(page_addr);
+    }
+
+    return cnt;
 }
 
 void CoWsCache::fini()
