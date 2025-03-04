@@ -13,13 +13,13 @@ my $RESDIR="/scratch/yetsion/cows/tools/ramulator2/res";
 
 my %BENCHMARKS = (
     "data-analytics-core" =>    { "cores" => [ 1, 8 ],  "half" => 0 },
-    "data-caching-core" =>      { "cores" => [ 1 ],     "half" => 1 },
-    "data-serving-core" =>      { "cores" => [ 1 ],     "half" => 1 },
+    "data-caching-core" =>      { "cores" => [ 1, 8 ],  "half" => 1 },
+    "data-serving-core" =>      { "cores" => [ 1, 8 ],  "half" => 1 },
     "graph-analytics-core" =>   { "cores" => [ 1, 8 ],  "half" => 0 },
-    "in-memory-analytics-core" => { "cores" => [ 1, 8 ], "half" => 0 },
-    "media-streaming-core" =>   { "cores" => [ 1 ],     "half" => 1 },
+    "in-memory-analytics-core" => { "cores" => [ 1, 8 ],    "half" => 0 },
+    "media-streaming-core" =>   { "cores" => [ 1, 8 ],  "half" => 1 },
     "web-search-core" =>        { "cores" => [ 1 ],     "half" => 1 },
-    "web-serving-core" =>       { "cores" => [ 1 ],     "half" => 1 },
+    "web-serving-core" =>       { "cores" => [ 1, 8 ],  "half" => 1 },
 );
 
 #
@@ -113,6 +113,10 @@ sub gen_config($$$) {
     close($fout);
 }
 
+sub usage($) {
+    printf("%s: <--name run-name> <--config config-file> [-d rundir-prefix] <--bench bench1> [--bench bench2...]\n", $0);
+}
+
 #
 # Main
 #
@@ -120,13 +124,19 @@ my @benchs;
 my $test_name;
 my $confile;
 my $rundir_prefix;
+my $help;
 
 GetOptions ("bench=s" => \@benchs,
             "name=s" => \$test_name,
             "dir=s" => \$rundir_prefix,
-            "config=s" => \$confile)
+            "config=s" => \$confile,
+            "help" => \$help)
     or die("Error in command line arguments\n");
 
+if($help) {
+    usage($0);
+    exit(0);
+}
 die "Error: no benchmarks given" if(scalar(@benchs) == 0);
 die "Error: no test name specified" if(!defined($test_name));
 die "Error: no config file specified" if(!defined($confile));
@@ -144,7 +154,7 @@ my $outconf = "$rundir/config";
 gen_config($confile, $outconf, \%macros);
 
 #my $cmd="/usr/bin/time -v $BINARY -f $outconf 2>&1 > out";
-my $cmd="/usr/bin/time -v $BINARY -f $outconf";
+my $cmd="/usr/bin/time -v $BINARY -f $outconf > out 2>&1";
 
 print "Changing dir to: $rundir\n";
 chdir $rundir;
