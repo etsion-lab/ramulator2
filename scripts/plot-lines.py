@@ -45,6 +45,8 @@ def build_parser():
                         required=True,
                         type=int,
                         help="column to plot (starting at 0)")
+    parser.add_argument('-o', '--output',
+                        help="output file to save to")
 
     return parser
 
@@ -69,7 +71,11 @@ def main():
     plt.ylabel("Fraction of entries in LLC needed\nto reqresent cached DRAM pages")
     plt.yticks(np.arange(0.0, 1.01, 0.1))
     plt.grid(visible=True, axis='y', which='both')
-    plt.show()
+    if args.output is not None:
+        print(f"Saving image to {args.output}")
+        plt.savefig(args.output)
+    else:
+        plt.show()
 
 if __name__ == '__main__':
     main()
