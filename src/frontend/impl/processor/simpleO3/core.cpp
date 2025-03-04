@@ -60,8 +60,14 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
   while (std::getline(trace_file, line)) {
     std::vector<std::string> tokens;
 
-    // remove comments
-    line = std::regex_replace(line, comment_regex, "");
+    // remove comments (try to avoid regexp since it seems to run slower)
+//    line = std::regex_replace(line, comment_regex, "");
+    size_t pos;
+    if( ((pos = line.find("  #")) != std::string::npos) ||
+        ((pos = line.find(" #")) != std::string::npos) ||
+        ((pos = line.find("#")) != std::string::npos)) {
+      line.resize(pos);
+    }
     tokenize(tokens, line, " ");
 
     int num_tokens = tokens.size();
