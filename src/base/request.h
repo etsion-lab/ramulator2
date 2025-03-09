@@ -9,7 +9,7 @@
 
 namespace Ramulator {
 
-struct Request { 
+struct Request {
   Addr_t    addr = -1;
   AddrVec_t addr_vec {};
 
@@ -17,7 +17,7 @@ struct Request {
   // 0 = Read, 1 = Write. The device spec defines all others
   struct Type {
     enum : int {
-      Read = 0, 
+      Read = 0,
       Write,
     };
   };
@@ -31,6 +31,8 @@ struct Request {
 
   Clk_t arrive = -1;   // Clock cycle when the request arrive at the memory controller
   Clk_t depart = -1;   // Clock cycle when the request depart the memory controller
+  Clk_t llc2mc = -1;   // Clock cycle when the request departs LLC to MC
+  Clk_t mc2llc = -1;   // Clock cycle when the request arrives at LLC from MC
 
   std::array<int, 4> scratchpad = { 0 };    // A scratchpad for the request
 
