@@ -49,12 +49,22 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
       uint32_t assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
       uint32_t dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
+      std::string cows_replacement = param<std::string>("cows_replacement").desc("Replacement policy in CoWs cache.").required();
+      CoWsCache::ReplPolicy *cows_policy = nullptr;
+      if(cows_replacement == "LRU") {
+        cows_policy = new CoWsCache::LRU();
+      } else if(cows_replacement == "LRU_nohit") {
+        cows_policy = new CoWsCache::LRU_nohit();
+      } else {
+        throw ConfigurationError("Unknown CoWs replacement policy {}!", cows_replacement);
+      }
+      std::cerr<<"# cows_replacement: "<<cows_policy->name()<<std::endl;
 
       CoWsCache::CoWsStats cows_stats;
       cows_stats.stats_fname = param<std::string>("cows_stats_file").desc("Filename for to dump COWS stats.").default_val("");
 
       // Simulation parameters
-      m_num_expected_insts = param<int>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
+      m_num_expected_insts = param<size_t>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
 
       // Create address translation module
       m_translation = create_child_ifce<ITranslation>();
@@ -62,6 +72,8 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       // Create CoWsCache
       m_cows_cache = nullptr;
       if(cows_enable) {
+        std::cerr<<"# Creating CoWsCache"<<std::endl;
+
         uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
         uint32_t cows_nlines = llc_nlines / llc2cows_ratio;
         // cows line number must be a multiple of its assoc
@@ -72,7 +84,10 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
                                     dram_page_bytes,
                                     cows_cache_access_latency,
                                     dram_latency_on_translation,
+                                    cows_policy,
                                     cows_stats);
+
+        std::cerr<<"# Finished creating CoWsCache"<<std::endl;
       }
 
       // Create the LLC
@@ -98,6 +113,11 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       register_stat(m_llc->s_llc_read_misses).name("llc_read_misses");
       register_stat(m_llc->s_llc_write_misses).name("llc_write_misses");
       register_stat(m_llc->s_llc_mshr_unavailable).name("llc_mshr_unavailable");
+      if(m_cows_cache != nullptr) {
+        register_stat(m_cows_cache->s_hits).name("cows_cache_hits");
+        register_stat(m_cows_cache->s_misses).name("cows_cache_misses");
+        register_stat(m_cows_cache->s_access).name("cows_cache_access");
+      }
 
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
         // register_stat(m_cores[core_id]->s_insts_retired).name("cycles_retired_core_{}", core_id);
