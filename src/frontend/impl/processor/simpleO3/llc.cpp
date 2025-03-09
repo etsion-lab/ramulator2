@@ -25,6 +25,7 @@ void SimpleO3LLC::tick() {
   auto it = m_miss_list.begin();
   while (it != m_miss_list.end()) {
     if (m_clk >= it->first) {
+      it->second.llc2mc = m_clk;
       if (!m_memory_system->send(it->second)) {
         it++;
       }
@@ -167,6 +168,11 @@ bool SimpleO3LLC::send(Request req) {
 };
 
 void SimpleO3LLC::receive(Request& req) {
+  req.mc2llc = m_clk;
+
+  //auto latency = req.mc2llc - req.llc2mc;
+  //fprintf(stderr, "Latency: %lu clocks (avg=%lu)\n", latency, m_cows_cache->s_avg_dram_lat_sum/m_cows_cache->s_avg_dram_lat_cnt);
+
   auto it = std::find_if(
     m_mshrs.begin(), m_mshrs.end(),
     [&req, this](MSHREntry_t mshr_entry) { return (align(mshr_entry.first) == align(req.addr)); }
