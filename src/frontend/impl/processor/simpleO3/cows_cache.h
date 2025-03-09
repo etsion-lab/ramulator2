@@ -165,6 +165,9 @@ public:
     uint64_t s_misses = 0;
     uint64_t s_access = 0;
 
+    Clk_t s_avg_dram_lat_sum = 0;
+    Clk_t s_avg_dram_lat_cnt = 0;
+
 public:
     CoWsCache(uint32_t nlines,
               uint32_t assoc,
@@ -192,8 +195,11 @@ public:
     uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & ~m_dram_page_mask) / m_cache_line_bytes); }
     uint32_t get_dram_page_bytes() { return m_dram_page_bytes; }
 
-    uint32_t get_dram_latency_on_translation(Addr_t addr) { return m_dram_latency_on_translation; }
+    uint32_t get_dram_latency_on_translation(Addr_t addr) {
+        return m_dram_latency_on_translation;
+    }
     uint32_t get_access_latency() { return m_access_latency; }
+
 private:
     Addr_t get_page_addr(Addr_t baddr) { return baddr & m_dram_page_mask; }
     uint32_t get_set_idx(Addr_t page_addr) {

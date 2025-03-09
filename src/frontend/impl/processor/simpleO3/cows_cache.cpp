@@ -41,8 +41,6 @@ bool CoWsCache::LRU::llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page
 {
     ++cows_cache.s_access;
 
-    std::cerr<<"HIT on 0x"<<std::hex<<page_addr<<std::endl;
-
     auto it = find_in_set(set, page_addr);
     if(it == set.end()) {
         // page was evicted from cows cache at some point
