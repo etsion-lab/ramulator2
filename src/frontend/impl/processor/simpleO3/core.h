@@ -8,6 +8,7 @@
 
 #include "base/type.h"
 #include "base/request.h"
+#include "base/popen_istream.h"
 #include "translation/translation.h"
 
 namespace Ramulator {
@@ -29,9 +30,15 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     size_t m_trace_length = 0;
     size_t m_curr_trace_idx = 0;
 
+    // input trace stream
+    std::string m_file_path_str;
+    int64_t m_asid = 0;
+    std::unique_ptr<PopenIstream> m_trace_file;
+
     public:
       Trace(std::string file_path_str);
       const Inst& get_next_inst();
+      bool read_next_inst();
 
       // singleton for a global ASLR DB
       static uint32_t dram_page_bytes;

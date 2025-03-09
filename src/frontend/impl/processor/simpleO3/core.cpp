@@ -7,7 +7,6 @@
 
 #include "base/exception.h"
 #include "base/utils.h"
-#include "base/popen_istream.h"
 #include "frontend/impl/processor/simpleO3/core.h"
 #include "frontend/impl/processor/simpleO3/llc.h"
 
@@ -19,9 +18,10 @@ uint32_t SimpleO3Core::Trace::dram_page_bytes = 8192;
 
 
 SimpleO3Core::Trace::Trace(std::string file_path_str) {
+  m_file_path_str = file_path_str;
+
   // search for app ID
   std::vector<std::string> path_tokens;
-  int64_t asid = 0x0;
 
   tokenize(path_tokens, file_path_str, ":");
   auto num_path_tokens = path_tokens.size();
@@ -30,76 +30,80 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
     throw ConfigurationError("Badly formatted trace path {}!", file_path_str);
   }
   if(num_path_tokens == 2) {
-    asid = std::stoll(path_tokens[1]);
-    if(!is_valid_asid(asid))
-      throw ConfigurationError("Bad ASID {} in trace_path {}!", asid, file_path_str);
+    m_asid = std::stoll(path_tokens[1]);
+    if(!is_valid_asid(m_asid))
+      throw ConfigurationError("Bad ASID {} in trace_path {}!", m_asid, file_path_str);
   }
 
   printf("# Loading trace file %s with asid %ld (0x%lx)\n",
-         path_tokens[0].c_str(), asid, asid);
-
+         path_tokens[0].c_str(), m_asid, m_asid);
 
   fs::path trace_path(path_tokens[0]);
   if (!fs::exists(trace_path)) {
     throw ConfigurationError("Trace {} does not exist!", file_path_str);
   }
 
-#if 0
-  std::ifstream trace_file(trace_path);
-  if (!trace_file.is_open()) {
-    throw ConfigurationError("Trace {} cannot be opened!", file_path_str);
-  }
-#else
   const std::string IN_UTIL = "zstdcat";
   std::string in_cmd = IN_UTIL + " " + path_tokens[0];
-  PopenIstream trace_file(in_cmd);
-#endif
-
-  std::string line;
-  std::regex comment_regex(" *#.*$");
-  while (std::getline(trace_file, line)) {
-    std::vector<std::string> tokens;
-
-    // remove comments (try to avoid regexp since it seems to run slower)
-//    line = std::regex_replace(line, comment_regex, "");
-    size_t pos;
-    if( ((pos = line.find("  #")) != std::string::npos) ||
-        ((pos = line.find(" #")) != std::string::npos) ||
-        ((pos = line.find("#")) != std::string::npos)) {
-      line.resize(pos);
-    }
-    tokenize(tokens, line, " ");
-
-    int num_tokens = tokens.size();
-
-    if (num_tokens != 2 & num_tokens != 3) {
-      throw ConfigurationError("Trace {} format invalid!", file_path_str);
-    }
-    int bubble_count = std::stoi(tokens[0]);
-
-    Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
-    load_addr += get_aslr_offset(asid);
-    assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
-    load_addr = addr_set_asid(load_addr, asid); // add ASID to the address
-
-    bool has_store = num_tokens == 2 ? false : true;
-    if (has_store) {
-      Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
-      store_addr += get_aslr_offset(asid);
-      assert(addr_get_asid(store_addr) == 0);
-      store_addr = addr_set_asid(store_addr, asid);  // add ASID to the address
-
-      m_trace.push_back({bubble_count, load_addr, store_addr});
-    } else {
-      m_trace.push_back({bubble_count, load_addr, -1});
-    }
-  }
-
-  trace_file.close();
-  m_trace_length = m_trace.size();
+  m_trace_file = std::make_unique<PopenIstream>(in_cmd);
 }
 
+bool SimpleO3Core::Trace::read_next_inst()
+{
+  std::string line;
+  const std::regex comment_regex(" *#.*$");
+
+  std::getline(*m_trace_file, line);
+  std::vector<std::string> tokens;
+
+  // remove comments (try to avoid regexp since it seems to run slower)
+//    line = std::regex_replace(line, comment_regex, "");
+  size_t pos;
+  if( ((pos = line.find("  #")) != std::string::npos) ||
+      ((pos = line.find(" #")) != std::string::npos) ||
+      ((pos = line.find("#")) != std::string::npos)) {
+    line.resize(pos);
+  }
+  tokenize(tokens, line, " ");
+
+  int num_tokens = tokens.size();
+
+  if (num_tokens != 2 & num_tokens != 3) {
+    throw ConfigurationError("Trace {} format invalid!", m_file_path_str);
+  }
+  int bubble_count = std::stoi(tokens[0]);
+
+  Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
+  load_addr += get_aslr_offset(m_asid);
+  assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
+  load_addr = addr_set_asid(load_addr, m_asid); // add ASID to the address
+
+  bool has_store = num_tokens == 2 ? false : true;
+  if (has_store) {
+    Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
+    store_addr += get_aslr_offset(m_asid);
+    assert(addr_get_asid(store_addr) == 0);
+    store_addr = addr_set_asid(store_addr, m_asid);  // add ASID to the address
+
+    m_trace.push_back({bubble_count, load_addr, store_addr});
+  } else {
+    m_trace.push_back({bubble_count, load_addr, -1});
+  }
+
+  return !m_trace_file->fail();
+}
+
+
 const SimpleO3Core::Trace::Inst& SimpleO3Core::Trace::get_next_inst() {
+  // do we need to read the next instruction from file?
+  if(m_trace_file != nullptr) {
+    if(!read_next_inst()) {
+      // just read the last instruction
+      m_trace_file.reset(); // frees trace file and makes unique_ptr==nullptr
+    }
+    m_trace_length = m_trace.size();
+  }
+
   const Inst& inst = m_trace[m_curr_trace_idx];
   m_curr_trace_idx = (m_curr_trace_idx + 1) % m_trace_length;
   return inst;
