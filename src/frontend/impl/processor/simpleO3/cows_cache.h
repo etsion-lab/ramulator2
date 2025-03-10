@@ -28,6 +28,7 @@ public:
 
         private:
             bool valid;
+            bool dirty;
             Addr_t page_phys_addr;
             Clk_t ready_clk;
             Addr_t real_page_phys_addr;
@@ -35,9 +36,19 @@ public:
 
         public:
             Line() : valid(false),
+                     dirty(false),
                      page_phys_addr(0),
-                     ready_clk(0),
+                     ready_clk(-1),
+                     real_page_phys_addr(0),
                      block_map(MAX_BLOCKS_PER_PAGE, false) {}
+
+            void reset() {
+                valid = false;
+                dirty = false;
+                setTag(0);
+                ready_clk = -1;
+                std::fill(block_map.begin(), block_map.end(), false);
+            }
 
             Addr_t getTag() const {
                 return page_phys_addr;
@@ -62,8 +73,16 @@ public:
                 valid = v;
             }
 
-            bool getValid() const {
+            bool isValid() const {
                 return valid;
+            }
+
+            void setDirty(bool d) {
+                dirty = d;
+            }
+
+            bool isDirty() const {
+                return dirty;
             }
 
             bool getBlockID(uint32_t block_id) const {
@@ -97,9 +116,9 @@ public:
         public:
         // all methods return true if there was a need to access the renaming table in DRAM
         virtual std::string name() const = 0;
-        virtual bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const = 0;
-        virtual bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const = 0;
-        virtual bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const = 0;
+        virtual bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const = 0;
+        virtual bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const = 0;
+        virtual bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id) const = 0;
 
         protected:
         virtual CacheSet_t::iterator victim(CacheSet_t& set) const {
@@ -108,6 +127,24 @@ public:
 
         CacheSet_t::iterator find_in_set(CacheSet_t& set, Addr_t page_addr) const {
             return std::find_if(set.begin(), set.end(), [page_addr](Line l){ return (l.getTag() == page_addr);});
+        }
+
+        CacheSet_t::iterator alloc_line(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const {
+            CacheSet_t::iterator it;
+            // set not full? add a new line
+            if(set.size() < cows_cache.m_assoc) {
+                set.push_front(Line());
+                it = set.begin();
+            }
+            else {
+                // set is full so get the a victim
+                it = victim(set);
+                it->reset();
+            }
+            // new entry in set. mark the tag.
+            it->setTag(page_addr);
+
+            return it;
         }
 
         void move_to_mru(CacheSet_t& set, CacheSet_t::iterator it) const {
@@ -119,19 +156,17 @@ public:
     };
 
     // The head of the list is the least-recently-used way.
-    class LRU : public ReplPolicy  {
-        std::string name() const { return "LRU"; }
-        bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const;
-        bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const;
-        bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const { return false; };
+    class LRU_nohit : public ReplPolicy  {
+        std::string name() const override { return "LRU_nohit"; }
+        bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
+        bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
+        bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id) const override;
     };
 
     // The head of the list is the least-recently-used way.
-    class LRU_nohit : public ReplPolicy  {
-        std::string name() const { return "LRU_nohit"; }
-        bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const { return false; };
-        bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const;
-        bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr) const;
+    class LRU : public LRU_nohit  {
+        std::string name() const override { return "LRU"; }
+        bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
     };
 
 private:
@@ -187,9 +222,9 @@ public:
     void perfect_cache_insert(Addr_t page_addr, Addr_t real_phys_addr);
     void perfect_cache_erase(Addr_t page_addr);
 
-    void llc_hit(Addr_t baddr);
+    uint32_t llc_hit(Addr_t baddr, bool is_write);
     // this function returns the latency incurred by the cows cach access (fill + potential WB)
-    uint32_t llc_miss(Addr_t baddr);
+    uint32_t llc_miss(Addr_t baddr, bool is_write);
     uint32_t llc_evict(Addr_t baddr);
 
     uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & ~m_dram_page_mask) / m_cache_line_bytes); }

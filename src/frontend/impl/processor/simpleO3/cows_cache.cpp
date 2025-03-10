@@ -37,25 +37,39 @@ CoWsCache::Line::toString() const
     return oss.str();
 }
 
-bool CoWsCache::LRU::llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const
+bool CoWsCache::LRU_nohit::llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const
 {
-    ++cows_cache.s_access;
-
-    auto it = find_in_set(set, page_addr);
-    if(it == set.end()) {
-        // page was evicted from cows cache at some point
-        ++cows_cache.s_misses;
+    if(!is_write) {
         return false;
     }
-    ++cows_cache.s_hits;
 
-    // move the accessed line to MRU (tail of list)
-    move_to_mru(set, it);
+    // need to access cows cache to update dirty bit
+    ++cows_cache.s_access;
 
-    return false;
+    // on a miss we access the mapping the cows cache (and insert it if it's not there)
+    bool ret = false;
+    auto it = find_in_set(set, page_addr);
+    if(it == set.end()) {
+        ++cows_cache.s_misses;
+
+        ret = true;
+
+        it = alloc_line(cows_cache, set, page_addr);
+    }
+    else {
+        ++cows_cache.s_hits;
+    }
+
+    // block bit not set? set it and mark dirty
+    if(!it->getBlockID(block_id)) {
+        it->setBlockID(block_id, true);
+        it->setDirty(true);
+    }
+
+    return ret;
 }
 
-bool CoWsCache::LRU::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const
+bool CoWsCache::LRU_nohit::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const
 {
     ++cows_cache.s_access;
 
@@ -67,20 +81,17 @@ bool CoWsCache::LRU::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t pag
 
         ret = true;
 
-        // set not full? add a new line
-        if(set.size() < cows_cache.m_assoc) {
-            set.push_front(Line());
-            it = set.begin();
-        }
-        else {
-            // set is full so get the victim
-            it = victim(set);
-        }
+        it = alloc_line(cows_cache, set, page_addr);
     }
     else {
         ++cows_cache.s_hits;
     }
-    it->setTag(page_addr);
+
+    // block bit not set? set it and mark dirty
+    if(is_write && !it->getBlockID(block_id)) {
+        it->setBlockID(block_id, true);
+        it->setDirty(true);
+    }
 
     // move the accessed line to MRU (tail of list)
     move_to_mru(set, it);
@@ -88,40 +99,7 @@ bool CoWsCache::LRU::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t pag
     return ret;
 }
 
-bool CoWsCache::LRU_nohit::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const
-{
-    ++cows_cache.s_access;
-
-    bool ret = false;
-    // on a miss we access the mapping the cows cache (and insert it if it's not there)
-    auto it = find_in_set(set, page_addr);
-    if(it == set.end()) {
-        ++cows_cache.s_misses;
-
-        ret = true;
-
-        // set not full? add a new line
-        if(set.size() < cows_cache.m_assoc) {
-            set.push_front(Line());
-            it = set.begin();
-        }
-        else {
-            // set is full so get the victim
-            it = victim(set);
-        }
-    }
-    else {
-        ++cows_cache.s_hits;
-    }
-    it->setTag(page_addr);
-
-    // move the accessed line to MRU (tail of list)
-    move_to_mru(set, it);
-
-    return ret;
-}
-
-bool CoWsCache::LRU_nohit::llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr) const
+bool CoWsCache::LRU_nohit::llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id) const
 {
     ++cows_cache.s_access;
 
@@ -137,7 +115,42 @@ bool CoWsCache::LRU_nohit::llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Add
     // move the accessed line to MRU (tail of list)
     move_to_mru(set, it);
 
+    // WB for dirty blocks
+    if(it->isDirty())
+        return true;
+
     return false;
+}
+
+bool CoWsCache::LRU::llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const
+{
+    // need to access cows cache to update dirty bit
+    ++cows_cache.s_access;
+
+    // on a miss we access the mapping the cows cache (and insert it if it's not there)
+    bool ret = false;
+    auto it = find_in_set(set, page_addr);
+    if(it == set.end()) {
+        ++cows_cache.s_misses;
+
+        ret = true;
+
+        it = alloc_line(cows_cache, set, page_addr);
+    }
+    else {
+        ++cows_cache.s_hits;
+    }
+
+    // block bit not set? set it and mark dirty
+    if(is_write && !it->getBlockID(block_id)) {
+        it->setBlockID(block_id, true);
+        it->setDirty(true);
+    }
+
+    // move the accessed line to MRU (tail of list)
+    move_to_mru(set, it);
+
+    return ret;
 }
 
 CoWsCache::CoWsCache(uint32_t nlines,
@@ -216,7 +229,7 @@ void CoWsCache::perfect_cache_erase(Addr_t baddr)
 }
 
 // this function is here as a placeholder for collecting statistics and calling the ReplPolicy hit method
-void CoWsCache::llc_hit(Addr_t baddr)
+uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
@@ -231,10 +244,17 @@ void CoWsCache::llc_hit(Addr_t baddr)
     // tell the replacement policy's we have a hit
     auto set_idx = get_set_idx(page_addr);
     auto set = m_cache_sets[set_idx];
-    m_policy->llc_hit(*this, set, page_addr);
+    auto cows_cache_miss = m_policy->llc_hit(*this, set, page_addr, block_id, is_write);
+
+    if(cows_cache_miss) {
+        // miss latency is at least a cows cache access latency
+        return get_dram_latency_on_translation(page_addr);
+    }
+
+    return 0;
 }
 
-uint32_t CoWsCache::llc_miss(Addr_t baddr)
+uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
@@ -259,7 +279,7 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr)
     // now update the real cache we had a miss
     auto set_idx = get_set_idx(page_addr);
     auto& set = m_cache_sets[set_idx];
-    auto cows_cache_miss = m_policy->llc_miss(*this, set, page_addr);
+    auto cows_cache_miss = m_policy->llc_miss(*this, set, page_addr, block_id, is_write);
 
     if(cows_cache_miss) {
         miss_latency += get_dram_latency_on_translation(page_addr);
@@ -272,6 +292,9 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
+
+    // miss latency is at least a cows cache access latency
+    uint32_t miss_latency = m_access_latency;
 
     auto it = m_perfect_cache.find(page_addr);
     assert(it != m_perfect_cache.end());
@@ -293,9 +316,13 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr)
     // now update the real cache we had a miss
     auto set_idx = get_set_idx(page_addr);
     auto set = m_cache_sets[set_idx];
-    auto cows_cache_miss = m_policy->llc_evict(*this, set, page_addr);
+    auto cows_cache_miss = m_policy->llc_evict(*this, set, page_addr, block_id);
 
-    return cnt;
+    if(cows_cache_miss) {
+        miss_latency += get_dram_latency_on_translation(page_addr);
+    }
+
+    return miss_latency;
 }
 
 void CoWsCache::fini()
