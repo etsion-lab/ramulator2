@@ -13,7 +13,7 @@
 int main(int argc, char* argv[]) {
   // Parse command line arguments
   argparse::ArgumentParser program("Ramulator", "2.0");
-  program.add_argument("-c", "--config").metavar("\"dumped YAML configuration\"")
+program.add_argument("-c", "--config").metavar("\"dumped YAML configuration\"")
     .help("String dump of the yaml configuration.");
   program.add_argument("-f", "--config_file").metavar("path-to-configuration-file")
     .help("Path to a YAML configuration file.");
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
   if (use_dumped_yaml && has_param_override) {
     spdlog::warn("Using dumped configuration. Parameter overrides with -p/--param will be ignored!");
   }
-  
+
   // Parse the configurations
   YAML::Node config;
   if (use_dumped_yaml) {
@@ -97,6 +97,8 @@ int main(int argc, char* argv[]) {
 
   int tick_mult = frontend_tick * mem_tick;
 
+  bool finished_warmup = false;
+
   for (uint64_t i = 0;; i++) {
     if (((i % tick_mult) % mem_tick) == 0) {
       frontend->tick();
@@ -104,6 +106,12 @@ int main(int argc, char* argv[]) {
 
     if (frontend->is_finished()) {
       break;
+    }
+
+    if(!finished_warmup && frontend->is_warmup_finished()) {
+      frontend->reset_stats();
+      memory_system->reset_stats();
+      finished_warmup = true;
     }
 
     if ((i % tick_mult) % frontend_tick == 0) {

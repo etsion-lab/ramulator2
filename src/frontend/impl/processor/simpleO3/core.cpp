@@ -193,6 +193,12 @@ void SimpleO3Core::tick() {
     }
   }
 
+  if (!finished_warmup) {
+    if (s_insts_retired >= (m_num_expected_insts/10)) {
+      finished_warmup = true;
+    }
+  }
+
   // First, issue the non-memory instructions
   int num_inserted_insts = 0;
   while (m_num_bubbles > 0) {

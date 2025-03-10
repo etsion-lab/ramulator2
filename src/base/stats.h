@@ -24,6 +24,7 @@ class Implementation;
 class StatWrapperBase {
   public:
     virtual void emit_to(YAML::Emitter& emitter) = 0;
+    virtual void reset(void) = 0;
 };
 
 template<typename T>
@@ -40,6 +41,12 @@ class Stats {
   public:
     bool is_empty() {
       return _registry.size() == 0;
+    }
+
+    void reset() {
+      for (auto [stat_name, stat_ptr] : _registry) {
+        stat_ptr->reset();
+      }
     }
 };
 
@@ -96,6 +103,17 @@ class StatWrapper : public StatWrapperBase {
       }
 
     };
+
+    void reset(void) {
+      if        (std::holds_alternative<T*>(_ref)) {
+        *std::get<T*>(_ref) = T();
+      } else if (std::holds_alternative<std::vector<T>*>(_ref)) {
+        for (auto& _val : *(std::get<std::vector<T>*>(_ref))) {
+          _val = T();
+        }
+      }
+    }
+
 };
 
 }        // namespace Ramulator

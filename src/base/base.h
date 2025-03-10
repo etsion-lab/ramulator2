@@ -37,13 +37,13 @@ class IMemorySystem;
 
 /**
  * @brief     Base class for concrete implementation of an interface in Ramulator.
- * 
+ *
  * @details
  * A common base class for concrete implementations of interfaces in Ramulator.
- * An implementation of an interface should inherit from both its corresponding interface class and this class. 
- * 
+ * An implementation of an interface should inherit from both its corresponding interface class and this class.
+ *
  */
-class Implementation { 
+class Implementation {
   friend class Factory;
   template<class T> friend class TopLevel;
 
@@ -65,13 +65,13 @@ class Implementation {
 
   public:
     Implementation(const YAML::Node& config, std::string ifce_name, std::string name, std::string desc, Implementation* parent):
-    m_config(config), 
-    m_ifce_name(ifce_name), m_name(name), m_desc(desc), m_id(config["id"].as<std::string>("_default_id")), 
+    m_config(config),
+    m_ifce_name(ifce_name), m_name(name), m_desc(desc), m_id(config["id"].as<std::string>("_default_id")),
     m_parent(parent), m_params(config) {};
 
     Implementation(const YAML::Node& config, std::string ifce_name, std::string name, std::string desc, std::string id, Implementation* parent):
-    m_config(config), 
-    m_ifce_name(ifce_name), m_name(name), m_desc(desc), m_id(id), 
+    m_config(config),
+    m_ifce_name(ifce_name), m_name(name), m_desc(desc), m_id(id),
     m_parent(parent), m_params(config) {};
 
     Implementation(std::string id, Implementation* parent):
@@ -87,19 +87,19 @@ class Implementation {
 
     /**
      * @brief     Performs initialization of the implementation object with the supplied configuration.
-     * 
+     *
      */
     virtual void init() = 0;
 
     /**
      * @brief     Setup the implementation that depends on other parts of the system.
-     * 
+     *
      */
     virtual void setup(IFrontEnd* frontend, IMemorySystem* memory_system) { return; };
 
     /**
      * @brief     Things to be done when the simulation ends.
-     * 
+     *
      */
     virtual void finalize() { return; };
 
@@ -110,7 +110,7 @@ class Implementation {
         return dynamic_cast<Interface_t*>(m_parent);
       } else {
         throw ConfigurationError("The parent is not an implementation of {}!", Interface_t::get_name());
-        return nullptr; 
+        return nullptr;
       }
     }
 
@@ -133,7 +133,7 @@ class Implementation {
       Implementation_t* impl = dynamic_cast<Implementation_t*>(ifce);
       if (impl == nullptr) {
         throw ConfigurationError("Failed to convert  {}!", Interface_t::get_name());
-        return nullptr; 
+        return nullptr;
       }
       return impl;
     }
@@ -152,7 +152,7 @@ class Implementation {
     _ParamChainer<T> param(const char* param_name) { return param<T>(std::string(param_name)); };
 
     _ParamGroupChainer param_group(std::string group_name) { return m_params._group(group_name); };
-  
+
     template <typename T>
     StatWrapper<T>& register_stat(T& val) { StatWrapper<T>* s = new StatWrapper<T>(val, *this, m_stats); return *s; };
     template <typename T>
@@ -160,9 +160,9 @@ class Implementation {
     bool has_stats() { return !m_stats.is_empty(); };
     /**
      * @brief    Recursively print the stats of myself and all my childs
-     * 
+     *
      */
-    virtual void print_stats(YAML::Emitter& emitter) { 
+    virtual void print_stats(YAML::Emitter& emitter) {
       emitter << YAML::Key << get_ifce_name();
       emitter << YAML::Value;
       emitter << YAML::BeginMap;
@@ -191,6 +191,19 @@ class Implementation {
       emitter << YAML::Newline;
     };
 
+    /**
+     * @brief    Recursively reset the stats of myself and all my childs (called after a warmup period)
+     *
+     */
+    void reset_stats() {
+      // Reset all my stats
+      m_stats.reset();
+      // Print all my children
+      for (auto child_impl : m_children) {
+        child_impl->reset_stats();
+      }
+    };
+
     std::string get_id() const { return m_id; };
     void set_id(std::string id) { m_id = id; };
 
@@ -213,18 +226,18 @@ class Implementation {
       const YAML::Node& child_config = config[ifce_name];
       if (!child_config) {
         throw ConfigurationError("Interface {} is not found in the configuration!", ifce_name);
-        return nullptr; 
+        return nullptr;
       }
 
       // Check if an implementation is given and matches the desired
       std::string impl_name = child_config["impl"].as<std::string>("");
       if (impl_name == "") {
         throw ConfigurationError("No implementation specified for interface {}!", ifce_name);
-        return nullptr; 
+        return nullptr;
       }
       if (desired_impl_name != "" && desired_impl_name != impl_name) {
         throw ConfigurationError("Specified implementation {} is different from the desired {}!", impl_name, desired_impl_name);
-        return nullptr; 
+        return nullptr;
       }
 
       Implementation* impl = Factory::create_implementation(ifce_name, impl_name, config, this);
@@ -234,7 +247,7 @@ class Implementation {
         return dynamic_cast<Interface_t*>(impl);
       } else {
         throw ConfigurationError("Could not convert a pointer to {} to a pointer to {}!", impl_name, ifce_name);
-        return nullptr; 
+        return nullptr;
       }
     }
 };
@@ -257,7 +270,7 @@ class Implementation {
 
 /**
  * @brief     Macro for registering an implementation class to the factory.
- * 
+ *
  */
 #define RAMULATOR_REGISTER_IMPLEMENTATION(_ifce_class, _impl_class, _name, _desc) \
   public:\
@@ -277,7 +290,7 @@ class Implementation {
   static inline bool registered = Factory::register_implementation(_ifce_class::get_name(), _name, _desc, make_ ## _impl_class);
 
 
-template <class T> 
+template <class T>
 class TopLevel {
   protected:
     std::vector<Implementation*> m_components;
@@ -305,7 +318,7 @@ class TopLevel {
       }
     }
 
-    template <class Ifce_t> 
+    template <class Ifce_t>
     Ifce_t* get_ifce(std::string desired_id = "") {
       for (auto component : m_components) {
         Ifce_t* target = dynamic_cast<Ifce_t*>(component);
@@ -321,7 +334,7 @@ class TopLevel {
       throw ConfigurationError("Cannot get Interface {}", Ifce_t::get_name());
     }
 
-    template <class Impl_t> 
+    template <class Impl_t>
     Impl_t* get_impl(std::string desired_id = "") {
       for (auto component : m_components) {
         Impl_t* target = dynamic_cast<Impl_t*>(component);

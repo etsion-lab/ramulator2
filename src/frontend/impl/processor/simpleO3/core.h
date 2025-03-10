@@ -129,6 +129,7 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
    ***********************************************/
   public:
     bool reached_expected_num_insts = false;
+    bool finished_warmup = false;
     size_t s_insts_retired = 0;
     size_t s_cycles_recorded = 0;
     Clk_t  s_mem_access_cycles = 0;
