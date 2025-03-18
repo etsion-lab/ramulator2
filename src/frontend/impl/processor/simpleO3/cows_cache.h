@@ -163,12 +163,6 @@ public:
         bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id) const override;
     };
 
-    // The head of the list is the least-recently-used way.
-    class LRU : public LRU_nohit  {
-        std::string name() const override { return "LRU"; }
-        bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
-    };
-
 private:
     const uint32_t m_nlines;
     const uint32_t m_nsets;
@@ -192,13 +186,25 @@ private:
 
     // track the number of valid lines in llc
     uint32_t m_lines_in_llc;
-    std::vector<std::pair<uint32_t, uint32_t>> m_cows2llc_valid;
+    std::vector<std::pair<uint32_t, uint32_t>> m_stats_cows2llc_valid;
+    std::vector<Clk_t> m_stats_cows_miss_clk;
+    std::vector<uint64_t> m_stats_set_access;
+    std::vector<uint64_t> m_stats_set_miss;
 
 public:
     // public stats
     uint64_t s_hits = 0;
     uint64_t s_misses = 0;
     uint64_t s_access = 0;
+
+    uint64_t s_accesses_on_llc_hit = 0;
+    uint64_t s_accesses_on_llc_miss = 0;
+    uint64_t s_accesses_on_llc_evict = 0;
+    uint64_t s_misses_on_llc_hit = 0;
+    uint64_t s_misses_on_llc_miss = 0;
+    uint64_t s_misses_on_llc_evict = 0;
+
+    uint64_t s_cows_cycles = 0;
 
     Clk_t s_avg_dram_lat_sum = 0;
     Clk_t s_avg_dram_lat_cnt = 0;
@@ -222,10 +228,10 @@ public:
     void perfect_cache_insert(Addr_t page_addr, Addr_t real_phys_addr);
     void perfect_cache_erase(Addr_t page_addr);
 
-    uint32_t llc_hit(Addr_t baddr, bool is_write);
-    // this function returns the latency incurred by the cows cach access (fill + potential WB)
-    uint32_t llc_miss(Addr_t baddr, bool is_write);
-    uint32_t llc_evict(Addr_t baddr);
+    // these functions return the latency incurred by the cows cach access (fill + potential WB)
+    uint32_t llc_hit(Addr_t baddr, bool is_write, Clk_t clk);
+    uint32_t llc_miss(Addr_t baddr, bool is_write, Clk_t clk);
+    uint32_t llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk);
 
     uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & ~m_dram_page_mask) / m_cache_line_bytes); }
     uint32_t get_dram_page_bytes() { return m_dram_page_bytes; }

@@ -47,13 +47,11 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       uint32_t dram_latency_on_translation = param<int>("cows_dram_latency_on_translation").desc("DRAM latency for COWs mapping translations.").required();
       uint32_t cows_cache_access_latency = param<int>("cows_cache_access_latency").desc("No. of cycles to access the CoWs cache.").required();
       uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
-      uint32_t assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
+      uint32_t cows_cache_assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
       uint32_t dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
       std::string cows_replacement = param<std::string>("cows_replacement").desc("Replacement policy in CoWs cache.").required();
       CoWsCache::ReplPolicy *cows_policy = nullptr;
-      if(cows_replacement == "LRU") {
-        cows_policy = new CoWsCache::LRU();
-      } else if(cows_replacement == "LRU_nohit") {
+      if(cows_replacement == "LRU_nohit") {
         cows_policy = new CoWsCache::LRU_nohit();
       } else {
         throw ConfigurationError("Unknown CoWs replacement policy {}!", cows_replacement);
@@ -77,9 +75,12 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
         uint32_t cows_nlines = llc_nlines / llc2cows_ratio;
         // cows line number must be a multiple of its assoc
-        cows_nlines -= cows_nlines % assoc;
+        cows_nlines = cows_cache_assoc * ((cows_nlines + cows_cache_assoc - 1) / cows_cache_assoc);
+
+        std::cerr<<"# LLC bytes="<<(llc_nlines*llc_linesize_bytes)<<" (or "<<llc_capacity_per_core*m_num_cores<<"), lines: "<<llc_nlines<<", COWS lines: "<<cows_nlines<<std::endl;
+
         m_cows_cache = new CoWsCache(cows_nlines,
-                                    assoc,
+                                    cows_cache_assoc,
                                     llc_linesize_bytes,
                                     dram_page_bytes,
                                     cows_cache_access_latency,
@@ -117,6 +118,13 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cows_cache->s_hits).name("cows_cache_hits");
         register_stat(m_cows_cache->s_misses).name("cows_cache_misses");
         register_stat(m_cows_cache->s_access).name("cows_cache_access");
+        register_stat(m_cows_cache->s_cows_cycles).name("cows_miss_cycles");
+        register_stat(m_cows_cache->s_accesses_on_llc_hit).name("cows_accesses_on_llc_hit");
+        register_stat(m_cows_cache->s_accesses_on_llc_miss).name("cows_accesses_on_llc_miss");
+        register_stat(m_cows_cache->s_accesses_on_llc_evict).name("cows_accesses_on_llc_evict");
+        register_stat(m_cows_cache->s_misses_on_llc_hit).name("cows_misses_on_llc_hit");
+        register_stat(m_cows_cache->s_misses_on_llc_miss).name("cows_misses_on_llc_miss");
+        register_stat(m_cows_cache->s_misses_on_llc_evict).name("cows_misses_on_llc_evict");
       }
 
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
@@ -163,6 +171,18 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
 
       return true;
     }
+
+#if 0
+    bool is_warmup_finished() override {
+      for (auto core : m_cores) {
+        if (!(core->finished_warmup)){
+          return false;
+        }
+      }
+
+      return true;
+    }
+#endif
 
     void connect_memory_system(IMemorySystem* memory_system) override {
       m_llc->connect_memory_system(memory_system);
