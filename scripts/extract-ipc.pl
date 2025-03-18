@@ -4,13 +4,14 @@ use strict;
 
 use Data::Dumper;
 
-my $ninsts = 0;
-my %cycles_per_core;
-my $total_cycles = 0;
-
 my @files = @ARGV;
 
 foreach my $f (@files) {
+    my $ninsts = 0;
+    my %cycles_per_core = ();
+    my $total_cycles = 0;
+
+
     my @p = split(/\//, $f);
     my $name = $p[scalar(@p) - 2];
 
@@ -37,6 +38,7 @@ foreach my $f (@files) {
         my $cy = $cycles_per_core{$c};
 #        printf("IPC[%3d]=%4.2f\n", $c, ($ninsts/$cy));
     }
+    printf("%s\n", $f);
     printf("%-30s: IPC[Total]=%.2f # (Total insts: %d, Total cycles: %d)\n",
             $name, (($ninsts*$ncores)/$total_cycles), ($ninsts*$ncores), $total_cycles);
 }
