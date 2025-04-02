@@ -1,0 +1,652 @@
+# cows_replacement: LRU_nohit
+# Loading trace file /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0 with asid 0 (0x0)
+# Loading trace file /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0 with asid 1 (0x1)
+# Loading trace file /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0 with asid 2 (0x2)
+# Loading trace file /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0 with asid 3 (0x3)
+# YOAV:  m_addr_bits[0] = 2
+# YOAV:  m_addr_bits[1] = 1
+# YOAV:  m_addr_bits[2] = 3
+# YOAV:  m_addr_bits[3] = 2
+# YOAV:  m_addr_bits[4] = 18
+# YOAV:  m_addr_bits[5] = 6
+[Ramulator::SimpleO3] [info] Processor Heartbeat 1000000 cycles.
+Core 0 retired 1000006 insts in 1994526 cycles (curr ipc=0.501).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 2000000 cycles.
+Core 0 retired 2000006 insts in 2847270 cycles (curr ipc=1.173).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 3000000 cycles.
+Core 0 retired 3000001 insts in 3696078 cycles (curr ipc=1.178).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 4000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 5000000 cycles.
+Core 0 retired 4000004 insts in 5471707 cycles (curr ipc=0.563).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 6000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 7000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 8000000 cycles.
+Core 0 retired 5000002 insts in 8211988 cycles (curr ipc=0.365).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 9000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 10000000 cycles.
+Core 0 retired 6000005 insts in 10982850 cycles (curr ipc=0.361).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 11000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 12000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 13000000 cycles.
+Core 0 retired 7000001 insts in 13291197 cycles (curr ipc=0.433).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 14000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 15000000 cycles.
+Core 0 retired 8000006 insts in 15647714 cycles (curr ipc=0.424).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 16000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 17000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 18000000 cycles.
+Core 0 retired 9000002 insts in 18476512 cycles (curr ipc=0.354).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 19000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 20000000 cycles.
+Core 0 retired 10000001 insts in 20655880 cycles (curr ipc=0.459).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 21000000 cycles.
+Core 0 retired 11000002 insts in 21436099 cycles (curr ipc=1.282).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 22000000 cycles.
+Core 0 retired 12000003 insts in 22094869 cycles (curr ipc=1.518).
+  Core 0 retired 13000005 insts in 22678230 cycles (curr ipc=1.714).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 23000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 24000000 cycles.
+Core 0 retired 14000006 insts in 24875519 cycles (curr ipc=0.455).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 25000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 26000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 27000000 cycles.
+Core 0 retired 15000004 insts in 27590464 cycles (curr ipc=0.368).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 28000000 cycles.
+Core 0 retired 16000003 insts in 28802923 cycles (curr ipc=0.825).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 29000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 30000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 31000000 cycles.
+Core 0 retired 17000001 insts in 31436968 cycles (curr ipc=0.380).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 32000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 33000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 34000000 cycles.
+Core 0 retired 18000001 insts in 34469064 cycles (curr ipc=0.330).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 35000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 36000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 37000000 cycles.
+Core 0 retired 19000001 insts in 37004412 cycles (curr ipc=0.394).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 38000000 cycles.
+Core 0 retired 20000001 insts in 38168041 cycles (curr ipc=0.859).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 39000000 cycles.
+Core 0 retired 21000003 insts in 39598449 cycles (curr ipc=0.699).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 40000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 41000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 42000000 cycles.
+Core 0 retired 22000002 insts in 42062896 cycles (curr ipc=0.406).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 43000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 44000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 45000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 46000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 47000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 48000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 49000000 cycles.
+Core 0 retired 23000004 insts in 49139871 cycles (curr ipc=0.141).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 50000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 51000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 52000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 53000000 cycles.
+Core 0 retired 24000004 insts in 53906882 cycles (curr ipc=0.210).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 54000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 55000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 56000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 57000000 cycles.
+Core 0 retired 25000006 insts in 57641773 cycles (curr ipc=0.268).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 58000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 59000000 cycles.
+Core 0 retired 26000005 insts in 59113581 cycles (curr ipc=0.679).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 60000000 cycles.
+Core 0 retired 27000004 insts in 60529926 cycles (curr ipc=0.706).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 61000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 62000000 cycles.
+Core 0 retired 28000006 insts in 62200768 cycles (curr ipc=0.599).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 63000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 64000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 65000000 cycles.
+Core 0 retired 29000005 insts in 65495337 cycles (curr ipc=0.304).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 66000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 67000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 68000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 69000000 cycles.
+Core 0 retired 30000006 insts in 69106165 cycles (curr ipc=0.277).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 70000000 cycles.
+Core 0 retired 31000002 insts in 70264234 cycles (curr ipc=0.864).
+  Core 0 retired 32000006 insts in 70919905 cycles (curr ipc=1.525).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 71000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 72000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 73000000 cycles.
+Core 0 retired 33000004 insts in 73964740 cycles (curr ipc=0.328).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 74000000 cycles.
+Core 0 retired 34000001 insts in 74697592 cycles (curr ipc=1.365).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 75000000 cycles.
+Core 0 retired 35000002 insts in 75178066 cycles (curr ipc=2.081).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 76000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 77000000 cycles.
+Core 0 retired 36000001 insts in 77073269 cycles (curr ipc=0.528).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 78000000 cycles.
+Core 0 retired 37000003 insts in 78167036 cycles (curr ipc=0.914).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 79000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 80000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 81000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 82000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 83000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 84000000 cycles.
+Core 0 retired 38000005 insts in 84108327 cycles (curr ipc=0.168).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 85000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 86000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 87000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 88000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 89000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 90000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 91000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 92000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 93000000 cycles.
+Core 0 retired 39000002 insts in 93727578 cycles (curr ipc=0.104).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 94000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 95000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 96000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 97000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 98000000 cycles.
+Core 0 retired 40000005 insts in 98258059 cycles (curr ipc=0.221).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 99000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 100000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 101000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 102000000 cycles.
+Core 0 retired 41000003 insts in 102697911 cycles (curr ipc=0.225).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 103000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 104000000 cycles.
+Core 0 retired 42000003 insts in 104596809 cycles (curr ipc=0.527).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 105000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 106000000 cycles.
+Core 0 retired 43000004 insts in 106100935 cycles (curr ipc=0.665).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 107000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 108000000 cycles.
+Core 0 retired 44000002 insts in 108297029 cycles (curr ipc=0.455).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 109000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 110000000 cycles.
+Core 0 retired 45000003 insts in 110378299 cycles (curr ipc=0.480).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 111000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 112000000 cycles.
+Core 0 retired 46000001 insts in 112323749 cycles (curr ipc=0.514).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 113000000 cycles.
+Core 0 retired 47000002 insts in 113883440 cycles (curr ipc=0.641).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 114000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 115000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 116000000 cycles.
+Core 0 retired 48000002 insts in 116442578 cycles (curr ipc=0.391).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 117000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 118000000 cycles.
+Core 0 retired 49000001 insts in 118002902 cycles (curr ipc=0.641).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 119000000 cycles.
+Core 0 retired 50000001 insts in 119332687 cycles (curr ipc=0.752).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 120000000 cycles.
+Core 0 retired 51000001 insts in 120746851 cycles (curr ipc=0.707).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 121000000 cycles.
+Core 0 retired 52000002 insts in 121537122 cycles (curr ipc=1.265).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 122000000 cycles.
+Core 0 retired 53000006 insts in 122025564 cycles (curr ipc=2.047).
+  Core 0 retired 54000001 insts in 122657593 cycles (curr ipc=1.582).
+  Core 0 retired 55000002 insts in 122942505 cycles (curr ipc=3.510).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 123000000 cycles.
+Core 0 retired 56000002 insts in 123629458 cycles (curr ipc=1.456).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 124000000 cycles.
+Core 0 retired 57000005 insts in 124924475 cycles (curr ipc=0.772).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 125000000 cycles.
+Core 0 retired 58000006 insts in 125787613 cycles (curr ipc=1.159).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 126000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 127000000 cycles.
+Core 0 retired 59000001 insts in 127629416 cycles (curr ipc=0.543).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 128000000 cycles.
+Core 0 retired 60000001 insts in 128927600 cycles (curr ipc=0.770).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 129000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 130000000 cycles.
+Core 0 retired 61000001 insts in 130917467 cycles (curr ipc=0.503).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 131000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 132000000 cycles.
+Core 0 retired 62000002 insts in 132984546 cycles (curr ipc=0.484).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 133000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 134000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 135000000 cycles.
+Core 0 retired 63000004 insts in 135495434 cycles (curr ipc=0.398).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 136000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 137000000 cycles.
+Core 0 retired 64000006 insts in 137768897 cycles (curr ipc=0.440).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 138000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 139000000 cycles.
+Core 0 retired 65000004 insts in 139750884 cycles (curr ipc=0.505).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 140000000 cycles.
+Core 0 retired 66000006 insts in 140807303 cycles (curr ipc=0.947).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 141000000 cycles.
+Core 0 retired 67000003 insts in 141144480 cycles (curr ipc=2.966).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 142000000 cycles.
+Core 0 retired 68000002 insts in 142128495 cycles (curr ipc=1.016).
+  Core 0 retired 69000004 insts in 142683481 cycles (curr ipc=1.802).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 143000000 cycles.
+Core 0 retired 70000001 insts in 143026224 cycles (curr ipc=2.918).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 144000000 cycles.
+Core 0 retired 71000001 insts in 144145012 cycles (curr ipc=0.894).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 145000000 cycles.
+Core 0 retired 72000004 insts in 145066597 cycles (curr ipc=1.085).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 146000000 cycles.
+Core 0 retired 73000004 insts in 146467899 cycles (curr ipc=0.714).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 147000000 cycles.
+Core 0 retired 74000006 insts in 147236313 cycles (curr ipc=1.301).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 148000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 149000000 cycles.
+Core 0 retired 75000001 insts in 149253650 cycles (curr ipc=0.496).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 150000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 151000000 cycles.
+Core 0 retired 76000004 insts in 151975437 cycles (curr ipc=0.367).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 152000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 153000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 154000000 cycles.
+Core 0 retired 77000001 insts in 154987401 cycles (curr ipc=0.332).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 155000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 156000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 157000000 cycles.
+Core 0 retired 78000001 insts in 157242433 cycles (curr ipc=0.443).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 158000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 159000000 cycles.
+Core 0 retired 79000002 insts in 159711600 cycles (curr ipc=0.405).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 160000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 161000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 162000000 cycles.
+Core 0 retired 80000004 insts in 162076648 cycles (curr ipc=0.423).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 163000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 164000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 165000000 cycles.
+Core 0 retired 81000002 insts in 165031122 cycles (curr ipc=0.338).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 166000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 167000000 cycles.
+Core 0 retired 82000002 insts in 167879972 cycles (curr ipc=0.351).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 168000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 169000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 170000000 cycles.
+Core 0 retired 83000006 insts in 170782929 cycles (curr ipc=0.344).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 171000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 172000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 173000000 cycles.
+Core 0 retired 84000002 insts in 173604094 cycles (curr ipc=0.354).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 174000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 175000000 cycles.
+Core 0 retired 85000005 insts in 175340465 cycles (curr ipc=0.576).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 176000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 177000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 178000000 cycles.
+Core 0 retired 86000005 insts in 178673122 cycles (curr ipc=0.300).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 179000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 180000000 cycles.
+Core 0 retired 87000006 insts in 180204529 cycles (curr ipc=0.653).
+  Core 0 retired 88000002 insts in 180936707 cycles (curr ipc=1.366).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 181000000 cycles.
+Core 0 retired 89000004 insts in 181636880 cycles (curr ipc=1.428).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 182000000 cycles.
+Core 0 retired 90000001 insts in 182314709 cycles (curr ipc=1.475).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 183000000 cycles.
+Core 0 retired 91000003 insts in 183657411 cycles (curr ipc=0.745).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 184000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 185000000 cycles.
+Core 0 retired 92000001 insts in 185618243 cycles (curr ipc=0.510).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 186000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 187000000 cycles.
+Core 0 retired 93000006 insts in 187618567 cycles (curr ipc=0.500).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 188000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 189000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 190000000 cycles.
+Core 0 retired 94000003 insts in 190618274 cycles (curr ipc=0.333).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 191000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 192000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 193000000 cycles.
+Core 0 retired 95000005 insts in 193824630 cycles (curr ipc=0.312).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 194000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 195000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 196000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 197000000 cycles.
+Core 0 retired 96000002 insts in 197226660 cycles (curr ipc=0.294).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 198000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 199000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 200000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 201000000 cycles.
+Core 0 retired 97000005 insts in 201643758 cycles (curr ipc=0.226).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 202000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 203000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 204000000 cycles.
+Core 0 retired 98000003 insts in 204683647 cycles (curr ipc=0.329).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 205000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 206000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 207000000 cycles.
+Core 0 retired 99000002 insts in 207980477 cycles (curr ipc=0.303).
+  [Ramulator::SimpleO3] [info] Processor Heartbeat 208000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 209000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 210000000 cycles.
+[Ramulator::SimpleO3] [info] Processor Heartbeat 211000000 cycles.
+Core 0 retired 100000006 insts in 211250131 cycles (curr ipc=0.306).
+  Frontend:
+  impl: SimpleO3
+  memory_access_cycles_recorded_core_3: 32343117
+  cycles_recorded_core_3: 211216062
+  num_expected_insts: 100000000
+  llc_eviction: 1165888
+  llc_write_access: 771238
+  llc_write_misses: 86108
+  cycles_recorded_core_2: 209108286
+  memory_access_cycles_recorded_core_2: 32042591
+  llc_read_access: 9182144
+  llc_read_misses: 5637723
+  llc_mshr_unavailable: 4295692
+  cycles_recorded_core_0: 211250130
+  memory_access_cycles_recorded_core_0: 32377579
+  cycles_recorded_core_1: 211823784
+  memory_access_cycles_recorded_core_1: 32456640
+  Translation:
+    impl: NoTranslation
+
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 418216
+  total_num_read_requests: 1428032
+  memory_system_cycles: 35303964
+
+  DRAM:
+    impl: DDR5-cow
+    idle_cycles_rank7: 2918033
+    total_refresh_energy_rank7: 3710.9495000000002
+    total_background_energy_rank7: 13942.166999999999
+    active_cycles_rank6: 24898640
+    pre_background_energy_rank6: 1492.847
+    total_refresh_energy_rank6: 3710.9495000000002
+    total_energy_rank6: 17653.1165
+    total_background_energy_rank6: 13942.166999999999
+    active_cycles_rank5: 24870505
+    active_cycles_rank1: 24773075
+    total_energy_rank7: 17653.1165
+    total_energy_rank1: 17653.1165
+    idle_cycles_rank6: 2985694
+    total_refresh_energy_rank0: 3710.9495000000002
+    pre_background_energy_rank0: 1647.5630000000001
+    act_background_energy_rank0: 12294.603999999999
+    active_cycles_rank2: 24717444
+    total_energy_rank0: 17653.1165
+    total_background_energy_rank1: 13942.167000000001
+    total_cmd_energy_rank6: 3710.9495000000002
+    total_cmd_energy: 29687.595999999998
+    total_background_energy_rank0: 13942.166999999999
+    act_background_energy_rank5: 12435.252500000001
+    active_cycles_rank0: 24589208
+    total_rfm_cycles_rank1: 0
+    total_rfm_cycles_rank5: 0
+    total_rfm_cycles_rank0: 0
+    total_cmd_energy_rank7: 3710.9495000000002
+    total_refresh_energy: 29687.595999999998
+    total_rfm_cycles_rank3: 0
+    total_refresh_energy_rank1: 3710.9495000000002
+    total_cmd_energy_rank1: 3710.9495000000002
+    total_rfm_cycles_rank2: 0
+    act_background_energy_rank1: 12386.5375
+    total_background_energy: 111537.33600000001
+    total_rfm_cycles_rank6: 0
+    total_cmd_energy_rank0: 3710.9495000000002
+    act_background_energy_rank3: 12451.9935
+    pre_background_energy_rank3: 1490.1735000000001
+    total_refresh_energy_rank5: 3710.9495000000002
+    total_rfm_cycles_rank7: 0
+    active_cycles_rank3: 24903987
+    idle_cycles_rank1: 3111259
+    pre_background_energy_rank7: 1459.0165
+    idle_cycles_rank0: 3295126
+    act_background_energy_rank7: 12483.1505
+    pre_background_energy_rank4: 1522.741
+    total_rfm_energy: 0
+    total_energy_rank5: 17653.1165
+    total_cmd_energy_rank2: 3710.9495000000002
+    total_energy_rank2: 17653.1165
+    act_background_energy_rank2: 12358.722
+    total_refresh_energy_rank2: 3710.9495000000002
+    total_cmd_energy_rank5: 3710.9495000000002
+    pre_background_energy_rank2: 1583.4449999999999
+    idle_cycles_rank2: 3166890
+    total_cmd_energy_rank4: 3710.9495000000002
+    idle_cycles_rank4: 3045482
+    total_background_energy_rank3: 13942.167000000001
+    total_refresh_energy_rank3: 3710.9495000000002
+    total_cmd_energy_rank3: 3710.9495000000002
+    active_cycles_rank7: 24966301
+    total_energy_rank3: 17653.1165
+    total_rfm_cycles_rank4: 0
+    idle_cycles_rank3: 2980347
+    total_energy: 141224.932
+    total_background_energy_rank4: 13942.166999999999
+    total_energy_rank4: 17653.1165
+    idle_cycles_rank5: 3013829
+    total_background_energy_rank2: 13942.166999999999
+    act_background_energy_rank4: 12419.425999999999
+    act_background_energy_rank6: 12449.32
+    total_refresh_energy_rank4: 3710.9495000000002
+    active_cycles_rank4: 24838852
+    total_background_energy_rank5: 13942.167000000001
+    pre_background_energy_rank1: 1555.6295
+    pre_background_energy_rank5: 1506.9145000000001
+  AddrMapper:
+    impl: RoBaRaChCo
+
+
+  Controller:
+    impl: Generic
+    id: Channel 0
+    avg_read_latency_0: 141.020889
+    priority_queue_len_avg_0: 0.0323978625
+    read_queue_len_avg_0: 3.37316418
+    read_row_misses_core_0: 18752
+    write_row_hits_0: 28049
+    read_row_misses_core_2: 18299
+    read_queue_len_0: 119086060
+    write_row_conflicts_0: 68697
+    write_row_misses_0: 5130
+    read_row_hits_core_1: 55526
+    read_row_hits_core_0: 55509
+    read_row_conflicts_core_0: 14153
+    queue_len_avg_0: 7.45585871
+    read_row_conflicts_0: 56954
+    read_row_misses_0: 73850
+    read_row_misses_core_3: 18234
+    row_conflicts_0: 125651
+    priority_queue_len_0: 1143773
+    read_row_conflicts_core_1: 14247
+    row_hits_0: 250294
+    write_queue_len_avg_0: 4.05029678
+    read_row_misses_core_1: 18565
+    read_row_hits_0: 222245
+    read_row_hits_core_2: 55839
+    write_queue_len_0: 142991529
+    row_misses_0: 78980
+    read_row_conflicts_core_2: 14227
+    read_row_hits_core_3: 55371
+    read_row_conflicts_core_3: 14327
+    read_latency_0: 845923036
+    num_read_reqs_0: 5998565
+    num_write_reqs_0: 116368
+    num_other_reqs_0: 0
+    queue_len_0: 263221362
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+
+
+    RowPolicy:
+      impl: ClosedRowPolicy
+      num_close_reqs: 12772
+
+
+
+  Controller:
+    impl: Generic
+    id: Channel 1
+    read_latency_1: 1062918810
+    priority_queue_len_avg_1: 0.0327245966
+    read_queue_len_avg_1: 3.56067824
+    read_row_hits_core_1: 56564
+    avg_read_latency_1: 124.959076
+    read_row_misses_core_0: 19073
+    read_row_conflicts_core_0: 14610
+    read_row_hits_core_0: 56449
+    read_row_misses_core_2: 17969
+    write_row_misses_1: 5459
+    write_row_hits_1: 28704
+    row_conflicts_1: 130327
+    read_row_hits_core_3: 56559
+    read_row_misses_core_1: 18962
+    write_row_conflicts_1: 71082
+    read_row_hits_1: 225954
+    read_queue_len_1: 125706053
+    read_row_conflicts_1: 59245
+    queue_len_avg_1: 7.8488183
+    row_misses_1: 80200
+    num_other_reqs_1: 0
+    row_hits_1: 254658
+    read_row_conflicts_core_1: 15154
+    read_row_hits_core_2: 56382
+    read_row_conflicts_core_2: 14585
+    read_row_misses_1: 74741
+    read_row_misses_core_3: 18737
+    read_row_conflicts_core_3: 14896
+    write_queue_len_avg_1: 4.25541496
+    queue_len_1: 277094392
+    num_read_reqs_1: 8506135
+    num_write_reqs_1: 113569
+    write_queue_len_1: 150233031
+    priority_queue_len_1: 1155308
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+
+
+    RowPolicy:
+      impl: ClosedRowPolicy
+      num_close_reqs: 12946
+
+
+
+  Controller:
+    impl: Generic
+    id: Channel 2
+    avg_read_latency_2: 101.83239
+    priority_queue_len_avg_2: 0.0328465365
+    read_row_misses_core_0: 18984
+    read_queue_len_2: 123911229
+    read_row_misses_core_2: 18108
+    read_row_hits_core_0: 55813
+    read_row_conflicts_core_0: 14340
+    read_row_hits_core_1: 55861
+    write_row_misses_2: 5547
+    read_queue_len_avg_2: 3.50983906
+    read_row_misses_core_1: 18577
+    read_row_conflicts_2: 58099
+    read_row_misses_2: 74413
+    read_row_conflicts_core_3: 14639
+    read_row_hits_2: 223462
+    write_row_conflicts_2: 70178
+    read_row_misses_core_3: 18744
+    write_row_hits_2: 28573
+    row_misses_2: 79960
+    num_other_reqs_2: 0
+    row_hits_2: 252035
+    read_row_conflicts_core_1: 14662
+    read_latency_2: 891217236
+    read_row_hits_core_2: 56148
+    read_row_conflicts_core_2: 14458
+    read_row_hits_core_3: 55640
+    num_write_reqs_2: 106475
+    queue_len_2: 272782500
+    num_read_reqs_2: 8751805
+    write_queue_len_2: 147711658
+    priority_queue_len_2: 1159613
+    write_queue_len_avg_2: 4.18399668
+    row_conflicts_2: 128277
+    queue_len_avg_2: 7.72668171
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+
+
+    RowPolicy:
+      impl: ClosedRowPolicy
+      num_close_reqs: 12912
+
+
+
+  Controller:
+    impl: Generic
+    id: Channel 3
+    priority_queue_len_avg_3: 0.0328621455
+    read_queue_len_avg_3: 3.56450105
+    read_row_hits_core_1: 56242
+    num_other_reqs_3: 0
+    read_row_conflicts_core_0: 14665
+    read_row_hits_core_0: 56009
+    read_row_misses_core_2: 18720
+    write_row_misses_3: 5519
+    read_row_misses_core_0: 18906
+    write_row_hits_3: 29165
+    row_misses_3: 80334
+    read_row_conflicts_3: 59356
+    write_queue_len_avg_3: 4.28908205
+    write_row_conflicts_3: 72093
+    read_row_misses_3: 74815
+    read_row_misses_core_1: 18637
+    read_queue_len_3: 125841017
+    avg_read_latency_3: 144.830902
+    read_latency_3: 1029879254
+    read_row_conflicts_core_1: 14894
+    read_row_hits_core_2: 56624
+    read_row_conflicts_core_2: 15014
+    num_read_reqs_3: 7110908
+    write_queue_len_3: 151421596
+    read_row_hits_core_3: 55844
+    num_write_reqs_3: 117850
+    row_hits_3: 253884
+    read_row_misses_core_3: 18552
+    read_row_conflicts_core_3: 14783
+    read_row_hits_3: 224719
+    queue_len_3: 278422777
+    priority_queue_len_3: 1160164
+    row_conflicts_3: 131449
+    queue_len_avg_3: 7.88644552
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+
+
+    RowPolicy:
+      impl: ClosedRowPolicy
+      num_close_reqs: 12813
+
+
+
+	Command being timed: "/scratch/elior.k/ramulator2/build/ramulator2 -f /scratch/elior.k/ramulator2/res/test_4_traces/config"
+	User time (seconds): 126.46
+	System time (seconds): 1.03
+	Percent of CPU this job got: 98%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:09.04
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 377556
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 5
+	Minor (reclaiming a frame) page faults: 220994
+	Voluntary context switches: 159
+	Involuntary context switches: 434
+	Swaps: 0
+	File system inputs: 200
+	File system outputs: 96
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

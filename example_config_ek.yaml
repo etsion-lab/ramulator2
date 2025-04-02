@@ -1,0 +1,77 @@
+# RUN command: perl /scratch/elior.k/ramulator2/scripts/run_ek.pl --name test --config /scratch/elior.k/ramulator2/example_config_ek.yaml --bench in-memory-analytics-core-1
+# OR RUN Manually: ./ramulator2 -f ./example_config_ek.yaml > res/log
+
+Frontend:
+  impl: SimpleO3
+  ipc: 6
+  inst_window_depth: 200
+  clock_ratio: 6
+  num_expected_insts: 100000000
+  # num_expected_insts: 500000
+  traces: 
+  # - example_inst.trace
+  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:0
+  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:1
+  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:2
+  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:3
+  cows_enable: false # cows disable
+  cows_replacement: "LRU_nohit"
+  llc_latency: 50
+  llc_linesize: 64
+  llc_associativity: 8
+  llc_num_mshr_per_core: 16
+  llc_capacity_per_core: 4MB
+
+  cows_dram_latency_on_translation: 200
+  cows_cache_access_latency: 10
+  cows_cache2llc_ratio: 1
+  cows_cache_assoc: 8
+  dram_page_bytes: 8KB
+  cows_stats_file: cows_stats.out
+
+  Translation:
+#    impl: RandomTranslation
+    impl: NoTranslation
+    max_addr: 9223372036854775807
+#    max_addr: 2147483648
+
+
+MemorySystem:
+  impl: GenericDRAM
+  clock_ratio: 1
+
+  DRAM:
+    impl: DDR5-cow
+    drampower_enable: true
+    high_temp: false
+#    high_temp: true
+    org:
+#      preset: DDR5_32Gb_x8
+      preset: DDR5_64Gb_x8
+      channel: 4
+      rank: 2
+    timing:
+#      preset: DDR5_3200C
+      preset: DDR5_8000C
+    voltage:
+    current:
+    RFM:
+      BRC: 2
+
+  Controller:
+    impl: Generic
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: ClosedRowPolicy
+#      impl: OpenRowPolicy
+      cap: 8
+#      cap: 16 #almost as good as open policy
+#      cap: 4
+    plugins:
+
+  AddrMapper:
+#    impl: RoBaRaCoCh
+    impl: RoBaRaChCo
