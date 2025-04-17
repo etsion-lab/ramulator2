@@ -9,11 +9,9 @@ Frontend:
   num_expected_insts: 100000000
   # num_expected_insts: 500000
   traces: 
-  # - example_inst.trace
-  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:0
-  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:1
-  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:2
-  - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0:3
+    - /scratch/elior.k/ramulator2/example_inst.trace
+  
+  # - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
   cows_enable: false # cows disable
   cows_replacement: "LRU_nohit"
   llc_latency: 50
@@ -41,7 +39,7 @@ MemorySystem:
   clock_ratio: 1
 
   DRAM:
-    impl: DDR5-cow
+    impl: DDR5-ek
     drampower_enable: true
     high_temp: false
 #    high_temp: true
@@ -72,6 +70,7 @@ MemorySystem:
 #      cap: 4
     plugins:
 
-  AddrMapper:
+  AddrMapper: #how the addr mapping is done to the rows,banks, etc
+    impl: RoBaRaCoCh
 #    impl: RoBaRaCoCh
     impl: RoBaRaChCo

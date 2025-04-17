@@ -14,6 +14,7 @@ target_sources(
   impl/DDR5-VRR.cpp
   impl/DDR5-RVRR.cpp
   impl/DDR5-cow.cpp
+  impl/DDR5-ek.cpp
   impl/LPDDR5.cpp
   impl/HBM.cpp
   impl/HBM2.cpp
