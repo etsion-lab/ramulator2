@@ -18,7 +18,7 @@ class DDR5_EK : public IDRAM, public Implementation {
     float s_avg_time_between_row_opens = 0.0f;
 
     // Map to track open and close times: channel -> rank -> bank -> row -> open cycle
-    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_open_times;
+    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_curr_open_times;
 
     // Map to store the total duration a row was open: channel -> rank -> bank -> row -> duration
     std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_durations;
@@ -30,7 +30,14 @@ class DDR5_EK : public IDRAM, public Implementation {
     std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_total_time_between_opens;
 
     // Map to track the number of times each row was reopened: channel -> rank -> bank -> row -> reopen count
-    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_reopen_count;
+    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_open_count;
+
+    // Maps to track the refresh count for each row: channel -> rank -> bank -> row -> refresh count
+    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_refresh_count;
+
+    size_t s_total_rows_opened = 0; // Total rows opened at least once
+    size_t s_total_rows_available = 0; // Total rows available across all channels
+    float s_percentage_rows_opened = 0.0f; // Percentage of rows opened
 
 
   public:
@@ -265,6 +272,14 @@ class DDR5_EK : public IDRAM, public Implementation {
       register_stat(s_avg_row_open_duration).name("avg_row_open_duration");
       register_stat(s_avg_time_between_row_opens).name("avg_time_between_row_opens");
 
+      // Calculate the total number of rows available
+      for (const auto& [name, org] : org_presets) {
+        s_total_rows_available += org.count[m_levels["channel"]] *
+                                  org.count[m_levels["rank"]] *
+                                  org.count[m_levels["bank"]] *
+                                  org.count[m_levels["row"]];
+      }
+      register_stat(s_percentage_rows_opened).name("percentage_rows_opened");
     };
 
     void issue_command(int command, const AddrVec_t& addr_vec) override {
@@ -278,50 +293,61 @@ class DDR5_EK : public IDRAM, public Implementation {
       m_channels[channel_id]->update_powers(command, addr_vec, m_clk);
       m_channels[channel_id]->update_states(command, addr_vec, m_clk);
 
+      // Handle refresh commands
+      if (m_command_meta.at(command).is_refreshing) {
+        // Iterate over all rows in the rank and update their refresh counters
+        for (int b = 0; b < m_organization.count[m_levels["bank"]]; b++) {
+          for (int r = 0; r < m_organization.count[m_levels["row"]]; r++) {
+            row_refresh_count[channel_id][rank_id][b][r]++;
+          }
+        }
+      }
+
       // Track row open and close events
       if (m_command_meta.at(command).is_opening) {
           // Row is being opened
+
+          if (row_open_count[channel_id][rank_id][bank_id][row_id] == 0) {
+            // This row is being opened for the first time
+            s_total_rows_opened++;
+          }
+          // update row open count
+          row_open_count[channel_id][rank_id][bank_id][row_id]++;
+
           if (row_last_open_cycle[channel_id][rank_id][bank_id].count(row_id)) {
               // Calculate time since the last opening
-              int last_open_cycle = row_last_open_cycle[channel_id][rank_id][bank_id][row_id];
-              int time_between_opens = m_clk - last_open_cycle;
+              int time_between_opens = m_clk - row_last_open_cycle[channel_id][rank_id][bank_id][row_id];
 
-              // Update total time and reopen count
+              // Update total time
               row_total_time_between_opens[channel_id][rank_id][bank_id][row_id] += time_between_opens;
-              row_reopen_count[channel_id][rank_id][bank_id][row_id]++;
               s_total_time_btwn_row_reopens += time_between_opens;
               s_total_row_reopen_count++;
           }
 
-          // Update the last open cycle
+          // Update the last open cycle and open time
           row_last_open_cycle[channel_id][rank_id][bank_id][row_id] = m_clk;
+          row_curr_open_times[channel_id][rank_id][bank_id][row_id] = m_clk;
 
-          // Record the open time
-          row_open_times[channel_id][rank_id][bank_id][row_id] = m_clk;
-
-          std::cout << "Row " << row_id << " in bank " << bank_id
-                    << ", rank " << rank_id << ", channel " << channel_id
-                    << " opened at cycle " << m_clk << std::endl;
+          // std::cout << "Row " << row_id << " in bank " << bank_id
+          //           << ", rank " << rank_id << ", channel " << channel_id
+          //           << " opened at cycle " << m_clk << std::endl;
       } else if (m_command_meta.at(command).is_closing) {
           // Row is being closed
-          if (row_open_times[channel_id][rank_id][bank_id].count(row_id)) {
-              int open_cycle = row_open_times[channel_id][rank_id][bank_id][row_id];
-              int duration = m_clk - open_cycle;
+          if (row_curr_open_times[channel_id][rank_id][bank_id].count(row_id)) {
+              int duration = m_clk - row_curr_open_times[channel_id][rank_id][bank_id][row_id];
               // Accumulate the total duration for the row
               row_durations[channel_id][rank_id][bank_id][row_id] += duration;
-
               // Update total row open duration
               s_total_row_open_duration += duration;
-
-              std::cout << "Row " << row_id << " in bank " << bank_id
-                        << ", rank " << rank_id << ", channel " << channel_id
-                        << " closed at cycle " << m_clk
-                        << " (open for " << duration << " cycles)" << std::endl;
-
               // Remove the row from the open times map
-              row_open_times[channel_id][rank_id][bank_id].erase(row_id);
-          } else {
-              std::cerr << "Error: Attempted to close a row that was not open!" << std::endl;
+              row_curr_open_times[channel_id][rank_id][bank_id].erase(row_id);
+
+              // std::cout << "Row " << row_id << " in bank " << bank_id
+              //           << ", rank " << rank_id << ", channel " << channel_id
+              //           << " closed at cycle " << m_clk
+              //           << " (open for " << duration << " cycles)" << std::endl;
+          } else {//TODO: probably not an error but just a refresh or something like that
+              // std::cerr << "Error: Attempted to close a row that was not open!" << std::endl;
           }
       }
 
@@ -422,7 +448,7 @@ class DDR5_EK : public IDRAM, public Implementation {
             for (const auto& [rank, banks] : ranks) {
                 for (const auto& [bank, rows] : banks) {
                     for (const auto& [row, total_time] : rows) {
-                        int reopen_count = row_reopen_count[channel][rank][bank][row];
+                        int reopen_count = row_open_count[channel][rank][bank][row] - 1;
                         if (reopen_count > 0) {
                             double average_time = static_cast<double>(total_time) / reopen_count;
                             std::cout << "Row " << row << " in bank " << bank
@@ -435,29 +461,48 @@ class DDR5_EK : public IDRAM, public Implementation {
         }
     }
 
-    void export_histograms_to_csv() {
-        // File paths for the CSV files
-        std::string avg_open_duration_file = "/avg_open_durations.csv";
-        std::string open_count_file = "/row_open_counts.csv";
-        std::string avg_reopen_interval_file = "/avg_reopen_intervals.csv";
+    void ensure_directory_exists(const std::string& dir) {
+      struct stat info;
+      if (stat(dir.c_str(), &info) != 0) {
+          // Directory does not exist, create it
+          mkdir(dir.c_str(), 0777);
+      } else if (!(info.st_mode & S_IFDIR)) {
+          // Path exists but is not a directory
+          std::cerr << "Error: Path " << dir << " exists but is not a directory." << std::endl;
+      }
+    }
 
-        // Open CSV files for writing
-        std::ofstream avg_open_duration_csv(avg_open_duration_file);
-        std::ofstream open_count_csv(open_count_file);
-        std::ofstream avg_reopen_interval_csv(avg_reopen_interval_file);
+    void export_histograms_to_csv(int max_channels = -1) {
+        // File path for the CSV file
+        std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
+        ensure_directory_exists(output_dir);
+        std::string output_file = output_dir + "/row_histograms.csv";
 
-        // Write headers for each CSV file
-        avg_open_duration_csv << "Channel,Rank,Bank,Row,AvgOpenDuration\n";
-        open_count_csv << "Channel,Rank,Bank,Row,OpenCount\n";
-        avg_reopen_interval_csv << "Channel,Rank,Bank,Row,AvgReopenInterval\n";
+        // Open the CSV file for writing
+        std::ofstream csv_file(output_file);
 
-        // Iterate through the data and populate the CSV files
+        if (!csv_file.is_open()) {
+            std::cerr << "Error: Could not open file " << output_file << " for writing." << std::endl;
+            return;
+        }
+
+        // Write the header
+        csv_file << "Channel,Rank,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshes,AvgRefreshesBetweenReopens\n";
+
+        // Iterate through the data and populate the CSV file
+        int channel_count = 0;
         for (const auto& [channel, ranks] : row_durations) {
+            // Stop if we've reached the maximum number of channels to process
+            if (max_channels != -1 && channel_count >= max_channels) {
+                break;
+            }
+
             for (const auto& [rank, banks] : ranks) {
                 for (const auto& [bank, rows] : banks) {
                     for (const auto& [row, total_duration] : rows) {
                         // Row open count
-                        int open_count = row_reopen_count[channel][rank][bank][row];
+                        int open_count = row_open_count[channel][rank][bank][row];
+                        if (open_count == 0) continue; // Skip unopened rows}
 
                         // Average row open duration
                         double avg_open_duration = (open_count > 0) 
@@ -472,21 +517,28 @@ class DDR5_EK : public IDRAM, public Implementation {
                             ? static_cast<double>(total_time_between_opens) / open_count 
                             : 0.0;
 
-                        // Write data to the respective CSV files
-                        avg_open_duration_csv << channel << "," << rank << "," << bank << "," << row << "," << avg_open_duration << "\n";
-                        open_count_csv << channel << "," << rank << "," << bank << "," << row << "," << open_count << "\n";
-                        avg_reopen_interval_csv << channel << "," << rank << "," << bank << "," << row << "," << avg_reopen_interval << "\n";
+                        // Total refreshes
+                        int total_refreshes = row_refresh_count[channel][rank][bank][row];
+
+                        // Average refreshes between reopens
+                        double avg_refreshes_between_reopens = (open_count > 0)
+                            ? static_cast<double>(total_refreshes) / open_count
+                            : 0.0;
+
+                        // Write the data to the CSV file
+                        csv_file << channel << "," << rank << "," << bank << "," << row << ","
+                                 << avg_open_duration << "," << open_count << "," << avg_reopen_interval << ","
+                                 << total_refreshes << "," << avg_refreshes_between_reopens << "\n";
                     }
                 }
             }
+            // Increment the channel count
+            channel_count++;
         }
 
-        // Close the CSV files
-        avg_open_duration_csv.close();
-        open_count_csv.close();
-        avg_reopen_interval_csv.close();
-
-        std::cout << "Histograms exported to CSV files in directory" << std::endl;
+        // Close the CSV file
+        csv_file.close();
+        std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
     }
 
   private:
@@ -951,7 +1003,12 @@ class DDR5_EK : public IDRAM, public Implementation {
         }
         s_avg_row_open_duration = static_cast<float>(s_total_row_open_duration) / total_rows;
       }
-      export_histograms_to_csv();
+
+      // Calculate the percentage of rows opened
+      if (s_total_rows_available > 0) {
+        s_percentage_rows_opened = (static_cast<float>(s_total_rows_opened) / s_total_rows_available) * 100.0f;
+      }
+      export_histograms_to_csv(1);
     }
 
     void process_rank_energy(PowerStats& rank_stats, Node* rank_node) {

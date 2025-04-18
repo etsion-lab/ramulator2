@@ -6,12 +6,12 @@ Frontend:
   ipc: 6
   inst_window_depth: 200
   clock_ratio: 6
-  num_expected_insts: 100000000
-  # num_expected_insts: 500000
+  # num_expected_insts: 100000000
+  num_expected_insts: 500000
   traces: 
-    - /scratch/elior.k/ramulator2/example_inst.trace
+    - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
+    # - /scratch/elior.k/ramulator2/example_inst.trace
   
-  # - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
   cows_enable: false # cows disable
   cows_replacement: "LRU_nohit"
   llc_latency: 50
@@ -44,8 +44,9 @@ MemorySystem:
     high_temp: false
 #    high_temp: true
     org:
-#      preset: DDR5_32Gb_x8
-      preset: DDR5_64Gb_x8
+      preset: DDR5_8Gb_x8
+      # preset: DDR5_32Gb_x8
+      # preset: DDR5_64Gb_x8
       channel: 4
       rank: 2
     timing:
