@@ -4,6 +4,7 @@ use strict;
 use Getopt::Long;
 use experimental 'smartmatch';
 
+use File::Copy; # Include for moving files
 use Data::Dumper;
 
 my $BENCHDIR="/scratch/elior.k/cloudsuite-traces";
@@ -172,11 +173,28 @@ if (opendir(my $dh, $BENCHDIR)) {
     print "Error: Could not open trace directory $BENCHDIR: $!\n";
 }
 
-#my $cmd="/usr/bin/time -v $BINARY -f $outconf 2>&1 > out";
+# Run the simulation command
 my $cmd="/usr/bin/time -v $BINARY -f $outconf > out 2>&1";
 
 print "Changing dir to: $rundir\n";
 chdir $rundir;
 
 print "Running command: $cmd\n";
-system($cmd);
+system($cmd); # This will block until the command finishes
+
+# Rename and move the CSV file
+my $csv_file = "/scratch/elior.k/ramulator2/res/csv_outputs/row_histograms.csv";
+if (-e $csv_file) {
+    my $renamed_csv = "/scratch/elior.k/ramulator2/res/csv_outputs/${test_name}_row_metrics.csv";
+    my $destination = "$rundir/${test_name}_row_metrics.csv";
+
+    # Rename the CSV file locally in csv-outputs
+    print "Renaming $csv_file to $renamed_csv\n";
+    move($csv_file, $renamed_csv) or die "Error: Could not rename $csv_file to $renamed_csv: $!";
+
+    # Move the renamed file to the output folder
+    print "Moving $renamed_csv to $destination\n";
+    move($renamed_csv, $destination) or die "Error: Could not move $renamed_csv to $destination: $!";
+} else {
+    print "Warning: CSV file $csv_file not found. Skipping rename and move.\n";
+}

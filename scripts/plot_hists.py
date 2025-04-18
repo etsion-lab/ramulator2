@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -10,7 +11,9 @@ if len(sys.argv) < 2:
     sys.exit(1)
 
 filenames = sys.argv[1:]
-output_dir = "res/csv_outputs"
+from datetime import datetime
+
+output_dir = "res/csv_outputs""res/csv_outputs"
 os.makedirs(output_dir, exist_ok=True)
 
 # Columns to plot
@@ -42,24 +45,40 @@ for filename in filenames:
         continue
 
     # Create individual PDF
-    pdf_path = os.path.join(output_dir, f"{prefix}_plots.pdf")
+    csv_dir = os.path.dirname(os.path.abspath(filename))
+    pdf_path = os.path.join(csv_dir, f"{prefix}_plots.pdf")
     with PdfPages(pdf_path) as pdf:
         for col in cols_to_plot:
-            bank_groups = list(df.groupby(["Channel", "Rank", "Bank"]))
-            n_banks = len(bank_groups)
-            n_cols = 2
-            n_rows = (n_banks + n_cols - 1) // n_cols
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows), squeeze=False)
-            for ax, ((ch, rk, bk), group) in zip(axes.flat, bank_groups):
-                ax.plot(group["Row"], group[col], linestyle='None', marker='o', markersize=2)
-                ax.set_title(f"{col} - C{ch}R{rk}B{bk}")
-                ax.set_xlabel("Row")
-                ax.set_ylabel(col)
-                ax.grid(True)
-            for ax in axes.flat[n_banks:]:
-                fig.delaxes(ax)
-            fig.suptitle(f"{col} per Bank ({prefix})", fontsize=16)
-            fig.tight_layout(rect=[0, 0, 1, 0.97])
+            values = df[col].dropna()
+            if values.empty:
+                continue
+
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+            fig.suptitle(f"{col} Analysis ({prefix})", fontsize=14)
+
+            # Histogram
+            axes[0].hist(values, bins=100, color='skyblue', edgecolor='black')
+            mean_val = values.mean()
+            median_val = values.median()
+            axes[0].axvline(mean_val, color='red', linestyle='--', label=f"Mean: {mean_val:.2e}")
+            axes[0].axvline(median_val, color='green', linestyle='--', label=f"Median: {median_val:.2e}")
+            axes[0].legend()
+            axes[0].set_title("Histogram")
+            axes[0].set_xlabel(col)
+            axes[0].set_ylabel("Row Count")
+
+            # CDF
+            sorted_vals = values.sort_values()
+            cdf = np.arange(1, len(sorted_vals) + 1) / len(sorted_vals)
+            axes[1].plot(sorted_vals, cdf, color='blue')
+            
+            
+            
+            axes[1].set_title("CDF")
+            axes[1].set_xlabel(col)
+            axes[1].set_ylabel("Cumulative %")
+
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
             pdf.savefig(fig)
             plt.close(fig)
 
@@ -78,30 +97,52 @@ if dataframes:
             merged_df = pd.merge(merged_df, df_renamed, on=keys, how='outer')
 
     # Create combined PDF
-    merged_pdf_path = os.path.join(output_dir, "merged_plots.pdf")
+    # Create combined PDF for all columns
+    merged_output_dir = "res/merged"
+    os.makedirs(merged_output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    merged_pdf_path = os.path.join(merged_output_dir, f"merged_plots_{timestamp}.pdf")
     with PdfPages(merged_pdf_path) as pdf:
         for base_col in cols_to_plot:
-            bank_groups = list(merged_df.groupby(["Channel", "Rank", "Bank"]))
-            n_banks = len(bank_groups)
-            n_cols = 2
-            n_rows = (n_banks + n_cols - 1) // n_cols
-            fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows), squeeze=False)
-            for ax, ((ch, rk, bk), group) in zip(axes.flat, bank_groups):
-                for prefix in dataframes.keys():
-                    colname = f"{prefix}_{base_col}"
-                    if colname in group:
-                        label = f"{prefix}"
-                        ax.plot(group["Row"], group[colname], linestyle='None', marker='o', markersize=2, label=label)
-                ax.set_title(f"{base_col} - C{ch}R{rk}B{bk}")
-                ax.set_xlabel("Row")
-                ax.set_ylabel(base_col)
-                ax.grid(True)
-                ax.legend()
-            for ax in axes.flat[n_banks:]:
-                fig.delaxes(ax)
-            fig.suptitle(f"{base_col} per Bank (Merged)", fontsize=16)
-            fig.tight_layout(rect=[0, 0, 1, 0.97])
+            values = []
+            for prefix in dataframes:
+                colname = f"{prefix}_{base_col}"
+                if colname in merged_df:
+                    values.append(merged_df[colname])
+
+            if not values:
+                continue
+
+            all_vals = pd.concat(values).dropna()
+            if all_vals.empty:
+                continue
+
+            fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+            fig.suptitle(f"{base_col} Analysis (Merged)", fontsize=14)
+
+            # Histogram
+            axes[0].hist(all_vals, bins=100, color='skyblue', edgecolor='black')
+            mean_val = all_vals.mean()
+            median_val = all_vals.median()
+            axes[0].axvline(mean_val, color='red', linestyle='--', label=f"Mean: {mean_val:.2e}")
+            axes[0].axvline(median_val, color='green', linestyle='--', label=f"Median: {median_val:.2e}")
+            axes[0].legend()
+            axes[0].set_title("Histogram")
+            axes[0].set_xlabel(base_col)
+            axes[0].set_ylabel("Row Count")
+
+            # CDF
+            sorted_vals = all_vals.sort_values()
+            cdf = np.arange(1, len(sorted_vals) + 1) / len(sorted_vals)
+            axes[1].plot(sorted_vals, cdf, color='blue')
+            axes[1].set_title("CDF")
+            axes[1].set_xlabel(base_col)
+            axes[1].set_ylabel("Cumulative %")
+
+            fig.tight_layout(rect=[0, 0.03, 1, 0.95])
             pdf.savefig(fig)
             plt.close(fig)
 
+        
+    
     print(f"Merged plots saved to: {merged_pdf_path}")

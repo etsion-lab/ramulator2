@@ -465,15 +465,16 @@ class DDR5_EK : public IDRAM, public Implementation {
     }
 
     void export_histograms_to_csv(int max_channels = -1) {
-        // Generate a timestamp
-        std::time_t now = std::time(nullptr);
-        char timestamp[20];
-        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", std::localtime(&now));
+        // // Generate a timestamp
+        // std::time_t now = std::time(nullptr);
+        // char timestamp[20];
+        // std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", std::localtime(&now));
 
         // File path for the CSV file
         std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
         ensure_directory_exists(output_dir);
-        std::string output_file = output_dir + "/row_histograms_" + timestamp + ".csv";
+        // std::string output_file = output_dir + "/row_histograms_" + timestamp + ".csv";
+        std::string output_file = output_dir + "/row_histograms.csv";
 
         // Open the CSV file for writing
         std::ofstream csv_file(output_file);
