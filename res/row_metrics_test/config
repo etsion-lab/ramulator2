@@ -1,5 +1,3 @@
-# RUN command: perl /scratch/elior.k/ramulator2/scripts/run_ek.pl --name test --config /scratch/elior.k/ramulator2/example_config_ek.yaml --bench in-memory-analytics-core-1
-# OR RUN Manually: ./ramulator2 -f ./example_config_ek.yaml > res/log
 
 Frontend:
   impl: SimpleO3
@@ -7,10 +5,8 @@ Frontend:
   inst_window_depth: 200
   clock_ratio: 1
   num_expected_insts: 100000000
-  # num_expected_insts: 500000
   traces: 
     - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
-    # - /scratch/elior.k/ramulator2/example_inst.trace
   
   cows_enable: false # cows disable
   cows_replacement: "LRU_nohit"
@@ -28,10 +24,8 @@ Frontend:
   cows_stats_file: cows_stats.out
 
   Translation:
-#    impl: RandomTranslation
     impl: NoTranslation
     max_addr: 9223372036854775807
-#    max_addr: 2147483648
 
 
 MemorySystem:
@@ -42,15 +36,11 @@ MemorySystem:
     impl: DDR5-ek
     drampower_enable: true
     high_temp: false
-#    high_temp: true
     org:
-      # preset: DDR5_8Gb_x8
-      # preset: DDR5_32Gb_x8
       preset: DDR5_64Gb_x8
       channel: 4
       rank: 2
     timing:
-#      preset: DDR5_3200C
       preset: DDR5_8000C
     voltage:
     current:
@@ -65,13 +55,9 @@ MemorySystem:
       impl: AllBank
     RowPolicy:
       impl: ClosedRowPolicy
-#      impl: OpenRowPolicy
       cap: 8
-#      cap: 16 #almost as good as open policy
-#      cap: 4
     plugins:
 
   AddrMapper: #how the addr mapping is done to the rows,banks, etc
     impl: RoBaRaCoCh
-#    impl: RoBaRaCoCh
     impl: RoBaRaChCo

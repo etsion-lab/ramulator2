@@ -2,7 +2,7 @@
 #include "dram/lambdas.h"
 #include <map> // Include for tracking open/close times
 #include <fstream> // Include for file operations
-
+#include <ctime> // Include for timestamp generation
 namespace Ramulator {
 
 class DDR5_EK : public IDRAM, public Implementation {
@@ -32,8 +32,7 @@ class DDR5_EK : public IDRAM, public Implementation {
     // Map to track the number of times each row was reopened: channel -> rank -> bank -> row -> reopen count
     std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_open_count;
 
-    // Maps to track the refresh count for each row: channel -> rank -> bank -> row -> refresh count
-    std::map<int, std::map<int, std::map<int, std::map<int, int>>>> row_refresh_count;
+    std::map<int, std::map<int, int>> rank_refresh_count; // channel -> rank -> refresh count
 
     size_t s_total_rows_opened = 0; // Total rows opened at least once
     size_t s_total_rows_available = 0; // Total rows available across all channels
@@ -293,15 +292,8 @@ class DDR5_EK : public IDRAM, public Implementation {
       m_channels[channel_id]->update_powers(command, addr_vec, m_clk);
       m_channels[channel_id]->update_states(command, addr_vec, m_clk);
 
-      // Handle refresh commands
-      if (m_command_meta.at(command).is_refreshing) {
-        // Iterate over all rows in the rank and update their refresh counters
-        for (int b = 0; b < m_organization.count[m_levels["bank"]]; b++) {
-          for (int r = 0; r < m_organization.count[m_levels["row"]]; r++) {
-            row_refresh_count[channel_id][rank_id][b][r]++;
-          }
-        }
-      }
+      // Handle refresh commands - Increment the refresh count for the rank
+      if (m_command_meta.at(command).is_refreshing) rank_refresh_count[channel_id][rank_id]++;
 
       // Track row open and close events
       if (m_command_meta.at(command).is_opening) {
@@ -473,10 +465,15 @@ class DDR5_EK : public IDRAM, public Implementation {
     }
 
     void export_histograms_to_csv(int max_channels = -1) {
+        // Generate a timestamp
+        std::time_t now = std::time(nullptr);
+        char timestamp[20];
+        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", std::localtime(&now));
+
         // File path for the CSV file
         std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
         ensure_directory_exists(output_dir);
-        std::string output_file = output_dir + "/row_histograms.csv";
+        std::string output_file = output_dir + "/row_histograms_" + timestamp + ".csv";
 
         // Open the CSV file for writing
         std::ofstream csv_file(output_file);
@@ -498,6 +495,7 @@ class DDR5_EK : public IDRAM, public Implementation {
             }
 
             for (const auto& [rank, banks] : ranks) {
+                int total_refreshes = rank_refresh_count[channel][rank]; // Get the total refresh count for the rank
                 for (const auto& [bank, rows] : banks) {
                     for (const auto& [row, total_duration] : rows) {
                         // Row open count
@@ -516,9 +514,6 @@ class DDR5_EK : public IDRAM, public Implementation {
                         double avg_reopen_interval = (open_count > 0) 
                             ? static_cast<double>(total_time_between_opens) / open_count 
                             : 0.0;
-
-                        // Total refreshes
-                        int total_refreshes = row_refresh_count[channel][rank][bank][row];
 
                         // Average refreshes between reopens
                         double avg_refreshes_between_reopens = (open_count > 0)
