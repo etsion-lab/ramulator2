@@ -4,4 +4,4 @@ ext/
 ramulator2
 *.so
 autobuild.sh
-res/row_metrics_example_test/*
+res/tmp_test*/*
