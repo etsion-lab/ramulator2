@@ -13,8 +13,8 @@ if len(sys.argv) < 2:
 filenames = sys.argv[1:]
 from datetime import datetime
 
-output_dir = "res/csv_outputs""res/csv_outputs""res/csv_outputs"
-os.makedirs(output_dir, exist_ok=True)
+# output_dir = "res/csv_outputs"
+# os.makedirs(output_dir, exist_ok=True)
 
 # Columns to plot
 cols_to_plot = [

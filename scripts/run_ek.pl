@@ -63,7 +63,7 @@ sub bench_to_trace($$$$) {
 
         my $trace_path = "$BENCHDIR/$name-$cores/trace.cpu$c";
         if (-e $trace_path) {
-            push(@ret, "- $trace_path:$asid");
+            push(@ret, "  - $trace_path:$asid");
         } else {
             print "Warning: Trace file not found: $trace_path\n";
         }
@@ -84,7 +84,8 @@ sub build_trace_list {
         $asid++;
     }
 
-    print Dumper(\@ret); # Add this line in the build_trace_list function
+    print "Generated trace list:\n";
+    print Dumper(\@ret); # Debugging output
     @ret;
 }
 
@@ -92,25 +93,39 @@ sub gen_config($$$) {
     (my $in, my $out, my $map) = @_;
 
     open(my $fin, '<', $in) or die "Could not open input config file $in: $!";
-    open(my $fout, '>', $out) or die "Could not open input config file $out: $!";
+    open(my $fout, '>', $out) or die "Could not open output config file $out: $!";
 
-    while(<$fin>) {
+    while (<$fin>) {
         chomp;
-        next if(/^\s*\#/); # skip comments
+        next if (/^\s*\#/); # Skip comments
 
         my $line = $_;
 
-        # find macros
-        if($line =~ /^(\s*)([A-Z_]+[0-9]*)\s*$/) {
+        # Handle the TRACES macro explicitly for the traces list
+        if ($line =~ /^\s*traces:\s*$/) {
+            print $fout "  traces:\n";
+            if (defined($map->{"TRACES"})) {
+                print "Writing traces to config:\n"; # Debugging output
+                foreach my $trace (@{$map->{"TRACES"}}) {
+                    print "  $trace\n"; # Debugging output
+                    print $fout "  $trace\n"; # Ensure proper indentation
+                }
+            } else {
+                die "Error: TRACES macro is not defined!";
+            }
+        }
+        # Handle other macros dynamically
+        elsif ($line =~ /^(\s*)([A-Z_]+[0-9]*)\s*$/) {
             my $s = $1;
             my $macro = $2;
 
-            die "Error: undefined macro \"$macro\"" if(!defined($map->{$macro}));
+            die "Error: undefined macro \"$macro\"" if (!defined($map->{$macro}));
             my @l = @{$map->{$macro}};
             foreach (@l) {
                 print $fout "$s" . $_ . "\n";
             }
         }
+        # Copy other lines as-is
         else {
             print $fout "$line\n";
         }
@@ -160,18 +175,18 @@ system("mkdir -p $rundir");
 my $outconf = "$rundir/config";
 gen_config($confile, $outconf, \%macros);
 
-# Add this block to print the contents of the trace directory
-print "Checking contents of trace directory: $BENCHDIR\n";
-if (opendir(my $dh, $BENCHDIR)) {
-    my @files = readdir($dh);
-    closedir($dh);
-    print "Files in $BENCHDIR:\n";
-    foreach my $file (@files) {
-        print "  $file\n";
-    }
-} else {
-    print "Error: Could not open trace directory $BENCHDIR: $!\n";
-}
+# # Add this block to print the contents of the trace directory
+# print "Checking contents of trace directory: $BENCHDIR\n";
+# if (opendir(my $dh, $BENCHDIR)) {
+#     my @files = readdir($dh);
+#     closedir($dh);
+#     print "Files in $BENCHDIR:\n";
+#     foreach my $file (@files) {
+#         print "  $file\n";
+#     }
+# } else {
+#     print "Error: Could not open trace directory $BENCHDIR: $!\n";
+# }
 
 # Run the simulation command
 my $cmd="/usr/bin/time -v $BINARY -f $outconf > out 2>&1";
