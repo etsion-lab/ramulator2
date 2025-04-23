@@ -5,3 +5,7 @@ ramulator2
 *.so
 autobuild.sh
 res/tmp_test*/*
+res/*
+!res/merged/
+!res/merged/**
+!res/**/*.pdf

@@ -11,7 +11,7 @@ perl /scratch/elior.k/ramulator2/scripts/run_ek.pl --name collect_metrics_SC_web
 
 # Plot histograms for Single Core
 echo "Plotting histograms for Single Core tests..."
-python3 scripts/plot_hists.py /res/collect_metrics_SC_*/*.csv
+python3 scripts/plot_hists.py res/collect_metrics_SC_*/*.csv
 
 # Multi Core
 perl /scratch/elior.k/ramulator2/scripts/run_ek.pl --name collect_metrics_MC_data-analytics-core --config /scratch/elior.k/ramulator2/example_config_ek.yaml --bench data-analytics-core-8
@@ -24,7 +24,7 @@ perl /scratch/elior.k/ramulator2/scripts/run_ek.pl --name collect_metrics_MC_web
 
 # Plot histograms for Multi Core
 echo "Plotting histograms for Multi Core tests..."
-python3 scripts/plot_hists.py /res/collect_metrics_MC_*/*.csv
+python3 scripts/plot_hists.py res/collect_metrics_MC_*/*.csv
 
 # data-analytics-core
 # data-caching-core
