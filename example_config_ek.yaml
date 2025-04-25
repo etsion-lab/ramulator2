@@ -44,9 +44,9 @@ MemorySystem:
     high_temp: false
 #    high_temp: true
     org:
-      # preset: DDR5_8Gb_x8
+      preset: DDR5_8Gb_x8
       # preset: DDR5_32Gb_x8
-      preset: DDR5_64Gb_x8
+      # preset: DDR5_64Gb_x8
       channel: 4
       rank: 2
     timing:

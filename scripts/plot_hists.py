@@ -21,7 +21,7 @@ cols_to_plot = [
     "AvgOpenDuration",
     "OpenCount",
     "AvgReopenInterval",
-    "TotalRefreshes",
+    "FullRefreshCycles",
     "AvgRefreshesBetweenReopens"
 ]
 
@@ -93,6 +93,12 @@ for filename in filenames:
             ax.text(0.98, 0.95, f"Hot Row Range: {row_min}–{row_max}", transform=ax.transAxes,
                     ha='right', va='top', fontsize=8, color='gray')
             ax.set_ylabel("% of Accesses")
+            ax2 = ax.twinx()
+            sorted_rows = np.sort(group["Row"])
+            cdf = np.arange(1, len(sorted_rows)+1) / len(sorted_rows)
+            ax2.plot(sorted_rows, cdf*100, color='blue', linestyle='--')
+            ax2.set_ylabel("Cumulative %", color='blue')
+            ax2.tick_params(axis='y', labelcolor='blue')
             ax.set_title(f"Row Access Distribution - C{ch}R{rk}B{bk}")
             ax.set_xlabel("Row")
             ax.set_ylabel("% of Accesses")
@@ -194,6 +200,12 @@ if dataframes:
             ax.tick_params(axis='x', rotation=45)
             ax.text(0.98, 0.95, f"Hot Row Range: {row_min}–{row_max}", transform=ax.transAxes,
                     ha='right', va='top', fontsize=8, color='gray')
+            ax2 = ax.twinx()
+            sorted_rows = np.sort(group["Row"])
+            cdf = np.arange(1, len(sorted_rows)+1) / len(sorted_rows)
+            ax2.plot(sorted_rows, cdf*100, color='blue', linestyle='--')
+            ax2.set_ylabel("Cumulative %", color='blue')
+            ax2.tick_params(axis='y', labelcolor='blue')
             ax.set_title(f"Row Access Distribution - C{ch}R{rk}B{bk}")
             ax.set_xlabel("Row")
             ax.set_ylabel("% of Accesses")

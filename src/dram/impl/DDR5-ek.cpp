@@ -292,8 +292,8 @@ class DDR5_EK : public IDRAM, public Implementation {
       m_channels[channel_id]->update_powers(command, addr_vec, m_clk);
       m_channels[channel_id]->update_states(command, addr_vec, m_clk);
 
-      // Handle refresh commands - Increment the refresh count for the rank
-      if (m_command_meta.at(command).is_refreshing) rank_refresh_count[channel_id][rank_id]++;
+      // // Handle refresh commands - Increment the refresh count for the rank
+      // if (m_command_meta.at(command).is_refreshing) rank_refresh_count[channel_id][rank_id]++;
 
       // Track row open and close events
       if (m_command_meta.at(command).is_opening) {
@@ -485,10 +485,12 @@ class DDR5_EK : public IDRAM, public Implementation {
         }
 
         // Write the header
-        csv_file << "Channel,Rank,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshes,AvgRefreshesBetweenReopens\n";
+        csv_file << "Channel,Rank,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshARCommands,FullRefreshCycles,AvgRefreshesBetweenReopens\n";
 
         // Iterate through the data and populate the CSV file
         int channel_count = 0;
+        int num_ranks = m_organization.count[m_levels["rank"]]; // Define num_ranks
+        int density = m_organization.density; // Get the density of the DDR5 device
         for (const auto& [channel, ranks] : row_durations) {
             // Stop if we've reached the maximum number of channels to process
             if (max_channels != -1 && channel_count >= max_channels) {
@@ -496,12 +498,14 @@ class DDR5_EK : public IDRAM, public Implementation {
             }
 
             for (const auto& [rank, banks] : ranks) {
-                int total_refreshes = rank_refresh_count[channel][rank]; // Get the total refresh count for the rank
+                int total_refresh_ar_commands = m_power_stats[channel * num_ranks + rank].cmd_counters[m_cmds_counted("REF")];
+                double full_refresh_cycles = static_cast<double>(total_refresh_ar_commands) / density;
+
                 for (const auto& [bank, rows] : banks) {
                     for (const auto& [row, total_duration] : rows) {
                         // Row open count
                         int open_count = row_open_count[channel][rank][bank][row];
-                        if (open_count == 0) continue; // Skip unopened rows}
+                        if (open_count == 0) continue; // Skip unopened rows
 
                         // Average row open duration
                         double avg_open_duration = (open_count > 0) 
@@ -518,13 +522,13 @@ class DDR5_EK : public IDRAM, public Implementation {
 
                         // Average refreshes between reopens
                         double avg_refreshes_between_reopens = (open_count > 0)
-                            ? static_cast<double>(total_refreshes) / open_count
+                            ? static_cast<double>(full_refresh_cycles) / open_count
                             : 0.0;
 
                         // Write the data to the CSV file
                         csv_file << channel << "," << rank << "," << bank << "," << row << ","
                                  << avg_open_duration << "," << open_count << "," << avg_reopen_interval << ","
-                                 << total_refreshes << "," << avg_refreshes_between_reopens << "\n";
+                                 << total_refresh_ar_commands << "," << full_refresh_cycles << "," << avg_refreshes_between_reopens << "\n";
                     }
                 }
             }
