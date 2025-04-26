@@ -116,7 +116,16 @@ for filename in filenames:
             fig.suptitle(f"{col} Analysis ({prefix})", fontsize=14)
 
             # Histogram
-            axes[0].hist(values, bins=100, color='skyblue', edgecolor='black')
+            if col in ["AvgOpenDuration", "OpenCount", "AvgReopenInterval"]:
+                min_val = values.min()
+                max_val = values.max()
+                bins = np.logspace(np.log10(min_val), np.log10(max_val), 50)
+                axes[0].hist(values, bins=bins, color='skyblue', edgecolor='black')
+                axes[0].set_xscale('log')
+                axes[1].set_xscale('log') # CDF logarithmic x-axis
+                x_vals = np.logspace(np.log10(min_val), np.log10(max_val), 500)
+            else:
+                axes[0].hist(values, bins=100, color='skyblue', edgecolor='black')
             mean_val = values.mean()
             median_val = values.median()
             axes[0].axvline(mean_val, color='red', linestyle='--', label=f"Mean: {mean_val:.2e}")
@@ -233,7 +242,16 @@ if dataframes:
             fig.suptitle(f"{base_col} Analysis (Merged)", fontsize=14)
 
             # Histogram
-            axes[0].hist(all_vals, bins=100, color='skyblue', edgecolor='black')
+            if base_col in ["AvgOpenDuration", "OpenCount", "AvgReopenInterval"]:
+                min_val = all_vals.min()
+                max_val = all_vals.max()
+                bins = np.logspace(np.log10(min_val), np.log10(max_val), 50)
+                axes[0].hist(all_vals, bins=bins, color='skyblue', edgecolor='black')
+                axes[0].set_xscale('log')
+                axes[1].set_xscale('log') # CDF logarithmic x-axis
+                x_vals = np.logspace(np.log10(min_val), np.log10(max_val), 500)
+            else:
+                axes[0].hist(all_vals, bins=100, color='skyblue', edgecolor='black')
             mean_val = all_vals.mean()
             median_val = all_vals.median()
             axes[0].axvline(mean_val, color='red', linestyle='--', label=f"Mean: {mean_val:.2e}")
