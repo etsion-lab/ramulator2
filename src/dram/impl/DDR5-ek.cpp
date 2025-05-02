@@ -563,6 +563,92 @@ class DDR5_EK : public IDRAM, public Implementation {
         std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
     }
 
+    void export_histograms_to_csv(const std::vector<int>& channel_ids, 
+                              const std::vector<int>& rank_ids, 
+                              const std::vector<int>& bankgroup_ids) {
+      // File path for the CSV file
+      std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
+      ensure_directory_exists(output_dir);
+      std::string output_file = output_dir + "/row_histograms.csv";
+
+      // Open the CSV file for writing
+      std::ofstream csv_file(output_file);
+
+      if (!csv_file.is_open()) {
+          std::cerr << "Error: Could not open file " << output_file << " for writing." << std::endl;
+          return;
+      }
+
+      // Write the header
+      csv_file << "Channel,Rank,BankGroup,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshARCommands,FullRefreshCycles,AvgRefreshesBetweenReopens\n";
+
+      // Iterate through the specified channels
+      for (int channel_id : channel_ids) {
+          if (row_durations.find(channel_id) == row_durations.end()) {
+              std::cerr << "Debug: No data found for Channel " << channel_id << std::endl;
+              continue;
+          }
+
+          // Iterate through the specified ranks
+          for (int rank_id : rank_ids) {
+              if (row_durations[channel_id].find(rank_id) == row_durations[channel_id].end()) {
+                  std::cerr << "Debug: No data found for Rank " << rank_id << " in Channel " << channel_id << std::endl;
+                  continue;
+              }
+
+              // Iterate through the specified bankgroups
+              for (int bankgroup_id : bankgroup_ids) {
+                  if (row_durations[channel_id][rank_id].find(bankgroup_id) == row_durations[channel_id][rank_id].end()) {
+                      std::cerr << "Debug: No data found for BankGroup " << bankgroup_id 
+                                << " in Rank " << rank_id << ", Channel " << channel_id << std::endl;
+                      continue;
+                  }
+
+                  // Get the banks for the specified bankgroup
+                  const auto& banks = row_durations[channel_id][rank_id][bankgroup_id];
+
+                  // Iterate through the banks and rows
+                  for (const auto& [bank, rows] : banks) {
+                      for (const auto& [row, total_duration] : rows) {
+                          int open_count = row_open_count[channel_id][rank_id][bankgroup_id][bank][row];
+                          if (open_count == 0) {
+                              // std::cout << "Debug: Skipping row " << row << " because open_count is 0." << std::endl;
+                              continue;
+                          }
+
+                          // Calculate metrics
+                          double avg_open_duration = (open_count > 0)
+                                                        ? static_cast<double>(total_duration) / open_count
+                                                        : 0.0;
+
+                          int total_time_between_opens = row_total_time_between_opens[channel_id][rank_id][bankgroup_id][bank][row];
+                          double avg_reopen_interval = (open_count > 0)
+                                                          ? static_cast<double>(total_time_between_opens) / open_count
+                                                          : 0.0;
+
+                          int total_refresh_ar_commands = m_power_stats[channel_id * m_organization.count[m_levels["rank"]] + rank_id]
+                                                              .cmd_counters[m_cmds_counted("REF")];
+                          double full_refresh_cycles = static_cast<double>(total_refresh_ar_commands) / m_organization.density;
+
+                          double avg_refreshes_between_reopens = (open_count > 0)
+                                                                    ? static_cast<double>(full_refresh_cycles) / open_count
+                                                                    : 0.0;
+
+                          // Write the data to the CSV file
+                          csv_file << channel_id << "," << rank_id << "," << bankgroup_id << "," << bank << "," << row << ","
+                                  << avg_open_duration << "," << open_count << "," << avg_reopen_interval << ","
+                                  << total_refresh_ar_commands << "," << full_refresh_cycles << "," << avg_refreshes_between_reopens << "\n";
+                      }
+                  }
+              }
+          }
+      }
+
+      // Close the CSV file
+      csv_file.close();
+      std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
+    }
+
   private:
     void set_organization() {
       // Channel width
@@ -1030,7 +1116,12 @@ class DDR5_EK : public IDRAM, public Implementation {
       if (s_total_rows_available > 0) {
         s_percentage_rows_opened = (static_cast<float>(s_total_rows_opened) / s_total_rows_available) * 100.0f;
       }
-      export_histograms_to_csv(1);
+      
+      // Call the updated export_histograms_to_csv function with specific IDs
+      std::vector<int> channels = {0}; // Channel 0
+      std::vector<int> ranks = {0};    // Rank 0
+      std::vector<int> bankgroups = {0}; // Bankgroup 0
+      export_histograms_to_csv(channels, ranks, bankgroups);
     }
 
     void process_rank_energy(PowerStats& rank_stats, Node* rank_node) {
