@@ -118,7 +118,7 @@ for filename in filenames:
 
             # Histogram
             if col in ["AvgOpenDuration", "OpenCount", "AvgReopenInterval"]:
-                min_val = values.min()
+                min_val = values[values > 0].min() if (values > 0).any() else 1e-10  # Handle zero values
                 max_val = values.max()
                 bins = np.logspace(np.log10(min_val), np.log10(max_val), 50)
                 axes[0].hist(values, bins=bins, color='skyblue', edgecolor='black')
@@ -244,7 +244,7 @@ if dataframes:
 
             # Histogram
             if base_col in ["AvgOpenDuration", "OpenCount", "AvgReopenInterval"]:
-                min_val = all_vals.min()
+                min_val = all_vals[all_vals > 0].min() if (all_vals > 0).any() else 1e-10  # Handle zero values
                 max_val = all_vals.max()
                 bins = np.logspace(np.log10(min_val), np.log10(max_val), 50)
                 axes[0].hist(all_vals, bins=bins, color='skyblue', edgecolor='black')
