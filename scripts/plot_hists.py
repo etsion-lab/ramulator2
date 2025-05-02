@@ -45,8 +45,9 @@ for filename in filenames:
         df = pd.read_csv(filename)
         df[cols_to_plot] = df[cols_to_plot].apply(pd.to_numeric, errors='coerce')
         dataframes[prefix] = df
-        # Aggregate bank access counts
-        grouped = df.groupby(["Channel", "Rank", "Bank"])["OpenCount"].sum()
+
+        # Aggregate bank access counts (now includes BankGroup)
+        grouped = df.groupby(["Channel", "Rank", "BankGroup", "Bank"])["OpenCount"].sum()
         for index, count in grouped.items():
             bank_access_counts[index] = bank_access_counts.get(index, 0) + count
     except Exception as e:
@@ -58,9 +59,9 @@ for filename in filenames:
     pdf_path = os.path.join(csv_dir, f"{prefix}_plots.pdf")
     with PdfPages(pdf_path) as pdf:
         # Add per-bank access heatmap for this file
-        bank_grouped = df.groupby(["Channel", "Rank", "Bank"])["OpenCount"].sum()
+        bank_grouped = df.groupby(["Channel", "Rank", "BankGroup", "Bank"])["OpenCount"].sum()
         fig, ax = plt.subplots(figsize=(10, 6))
-        bank_labels = [f"C{ch}R{rk}B{bk}" for (ch, rk, bk) in bank_grouped.index]
+        bank_labels = [f"C{ch}R{rk}BG{bg}B{bk}" for (ch, rk, bg, bk) in bank_grouped.index]
         counts = bank_grouped.values
         ax.bar(bank_labels, counts, color='slateblue')
         ax.set_title(f"Bank Access Heatmap ({prefix})")
@@ -72,12 +73,12 @@ for filename in filenames:
         plt.close(fig)
 
         # Add row access distribution per bank
-        bank_groups = list(df.groupby(["Channel", "Rank", "Bank"]))
+        bank_groups = list(df.groupby(["Channel", "Rank", "BankGroup", "Bank"]))
         n_banks = len(bank_groups)
         n_cols = 2
         n_rows = (n_banks + n_cols - 1) // n_cols
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows), squeeze=False)
-        for ax, ((ch, rk, bk), group) in zip(axes.flat, bank_groups):
+        for ax, ((ch, rk, bg, bk), group) in zip(axes.flat, bank_groups):
             row_min = group["Row"].min()
             row_max = group["Row"].max()
             row_range = row_max - row_min + 1
@@ -99,7 +100,7 @@ for filename in filenames:
             ax2.plot(sorted_rows, cdf*100, color='blue', linestyle='--')
             ax2.set_ylabel("Cumulative %", color='blue')
             ax2.tick_params(axis='y', labelcolor='blue')
-            ax.set_title(f"Row Access Distribution - C{ch}R{rk}B{bk}")
+            ax.set_title(f"Row Access Distribution - C{ch}R{rk}BG{bg}B{bk}")
             ax.set_xlabel("Row")
             ax.set_ylabel("% of Accesses")
         for ax in axes.flat[n_banks:]:
@@ -152,9 +153,9 @@ for filename in filenames:
 
     print(f"Saved: {pdf_path}")
 
-# Merge dataframes on shared keys: Channel, Rank, Bank, Row
+# Merge dataframes on shared keys: Channel, Rank, BankGroup, Bank, Row
 if dataframes:
-    keys = ["Channel", "Rank", "Bank", "Row"]
+    keys = ["Channel", "Rank", "BankGroup", "Bank", "Row"]
     merged_df = None
     for prefix, df in dataframes.items():
         df_renamed = df[keys + cols_to_plot].copy()
@@ -177,7 +178,7 @@ if dataframes:
     with PdfPages(merged_pdf_path) as pdf:
         # Add bank access heatmap
         fig, ax = plt.subplots(figsize=(10, 6))
-        bank_labels = [f"C{ch}R{rk}B{bk}" for (ch, rk, bk) in bank_access_counts]
+        bank_labels = [f"C{ch}R{rk}BG{bg}B{bk}" for (ch, rk, bg, bk) in bank_access_counts]
         counts = [bank_access_counts[key] for key in bank_access_counts]
         ax.bar(bank_labels, counts, color='slateblue')
         ax.set_title("Bank Access Heatmap (Merged)")
@@ -189,12 +190,12 @@ if dataframes:
         plt.close(fig)
 
         # Add row access distributions for each bank in merged
-        bank_groups = list(merged_df.groupby(["Channel", "Rank", "Bank"]))
+        bank_groups = list(merged_df.groupby(["Channel", "Rank", "BankGroup", "Bank"]))  # Include BankGroup
         n_banks = len(bank_groups)
         n_cols = 2
         n_rows = (n_banks + n_cols - 1) // n_cols
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(14, 5 * n_rows), squeeze=False)
-        for ax, ((ch, rk, bk), group) in zip(axes.flat, bank_groups):
+        for ax, ((ch, rk, bg, bk), group) in zip(axes.flat, bank_groups):
             row_min = group["Row"].min()
             row_max = group["Row"].max()
             row_range = row_max - row_min + 1
@@ -215,7 +216,7 @@ if dataframes:
             ax2.plot(sorted_rows, cdf*100, color='blue', linestyle='--')
             ax2.set_ylabel("Cumulative %", color='blue')
             ax2.tick_params(axis='y', labelcolor='blue')
-            ax.set_title(f"Row Access Distribution - C{ch}R{rk}B{bk}")
+            ax.set_title(f"Row Access Distribution - C{ch}R{rk}BG{bg}B{bk}")  # Include BankGroup in title
             ax.set_xlabel("Row")
             ax.set_ylabel("% of Accesses")
         for ax in axes.flat[n_banks:]:

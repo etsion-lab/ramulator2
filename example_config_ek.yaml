@@ -6,8 +6,10 @@ Frontend:
   ipc: 6
   inst_window_depth: 200
   clock_ratio: 1
-  num_expected_insts: 100000000
-  # num_expected_insts: 500000
+  # num_expected_insts: 240000000000 #approx number of instructions to get to ~10s of simulation time
+  # num_expected_insts: 100000000 #100mil
+  # num_expected_insts: 10000000
+  num_expected_insts: 500000
   traces: 
     # - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
     # - /scratch/elior.k/ramulator2/example_inst.trace
@@ -66,7 +68,9 @@ MemorySystem:
     RowPolicy:
       impl: ClosedRowPolicy
 #      impl: OpenRowPolicy
+# cap means after how many accesses to the row the row will be closed
       cap: 8
+      # cap: 1
 #      cap: 16 #almost as good as open policy
 #      cap: 4
     plugins:
