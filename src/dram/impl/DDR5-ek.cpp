@@ -21,13 +21,13 @@ class DDR5_EK : public IDRAM, public Implementation {
     std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, int>>>>> row_curr_open_times;
 
     // Map to store the total duration a row was open: channel -> rank -> bankgroup -> bank -> row -> duration
-    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, int>>>>> row_durations;
+    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_durations;
 
     // Map to track the last open cycle for each row: channel -> rank -> bankgroup -> bank -> row -> last open cycle
     std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, int>>>>> row_last_open_cycle;
 
     // Map to track the total time between openings for each row: channel -> rank -> bankgroup -> bank -> row -> total time
-    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, int>>>>> row_total_time_between_opens;
+    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_total_time_between_opens;
 
     // Map to track the number of times each row was reopened: channel -> rank -> bankgroup -> bank -> row -> reopen count
     std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, int>>>>> row_open_count;
@@ -310,7 +310,7 @@ class DDR5_EK : public IDRAM, public Implementation {
 
           if (row_last_open_cycle[channel_id][rank_id][bg_id][bank_id].count(row_id)) {
               // Calculate time since the last opening
-              int time_between_opens = m_clk - row_last_open_cycle[channel_id][rank_id][bg_id][bank_id][row_id];
+              size_t time_between_opens = m_clk - row_last_open_cycle[channel_id][rank_id][bg_id][bank_id][row_id];
 
               // Update total time
               row_total_time_between_opens[channel_id][rank_id][bg_id][bank_id][row_id] += time_between_opens;
@@ -328,7 +328,7 @@ class DDR5_EK : public IDRAM, public Implementation {
       } else if (m_command_meta.at(command).is_closing) {
           // Row is being closed
           if (row_curr_open_times[channel_id][rank_id][bg_id][bank_id].count(row_id)) {
-              int duration = m_clk - row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id];
+              size_t duration = m_clk - row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id];
               // Accumulate the total duration for the row
               row_durations[channel_id][rank_id][bg_id][bank_id][row_id] += duration;
               // Update total row open duration
@@ -621,7 +621,7 @@ class DDR5_EK : public IDRAM, public Implementation {
                                                         ? static_cast<double>(total_duration) / open_count
                                                         : 0.0;
 
-                          int total_time_between_opens = row_total_time_between_opens[channel_id][rank_id][bankgroup_id][bank][row];
+                          size_t total_time_between_opens = row_total_time_between_opens[channel_id][rank_id][bankgroup_id][bank][row];
                           double avg_reopen_interval = (open_count > 0)
                                                           ? static_cast<double>(total_time_between_opens) / open_count
                                                           : 0.0;

@@ -171,7 +171,7 @@ void SimpleO3Core::tick() {
   s_insts_retired += m_window.retire();
 
   if(m_id == 0) {
-    const uint32_t PRINT_EVERY_INSTS = 1000000;
+    const uint32_t PRINT_EVERY_INSTS = 100000000;
     static uint64_t last_printed_insts = 0;
     static uint64_t prev_insts_retired = 0;
     static uint64_t prev_clk = 0;
