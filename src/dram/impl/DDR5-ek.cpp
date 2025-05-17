@@ -38,6 +38,12 @@ class DDR5_EK : public IDRAM, public Implementation {
     size_t s_total_rows_available = 0; // Total rows available across all channels
     float s_percentage_rows_opened = 0.0f; // Percentage of rows opened
 
+    int m_num_channels = -1;
+    int m_num_ranks = -1;
+    int m_num_bankgroups = -1;
+    int m_num_banks = -1;
+    int m_num_rows = -1;
+
 
   public:
     inline static const std::map<std::string, Organization> org_presets = {
@@ -272,13 +278,11 @@ class DDR5_EK : public IDRAM, public Implementation {
       register_stat(s_avg_time_between_row_opens).name("avg_time_between_row_opens");
 
       // Calculate the total number of rows available
-      for (const auto& [name, org] : org_presets) {
-        s_total_rows_available += org.count[m_levels["channel"]] *
-                                  org.count[m_levels["rank"]] *
-                                  org.count[m_levels["bankgroup"]] *
-                                  org.count[m_levels["bank"]] *
-                                  org.count[m_levels["row"]];
-      }
+      s_total_rows_available += m_num_channels   *
+                                m_num_ranks      *
+                                m_num_bankgroups *
+                                m_num_banks      *
+                                m_num_rows;      
       register_stat(s_percentage_rows_opened).name("percentage_rows_opened");
     };
 
@@ -325,9 +329,50 @@ class DDR5_EK : public IDRAM, public Implementation {
           // std::cout << "Row " << row_id << " in bank " << bank_id
           //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
           //           << " opened at cycle " << m_clk << std::endl;
-      } else if (m_command_meta.at(command).is_closing) {
-          // Row is being closed
-          if (row_curr_open_times[channel_id][rank_id][bg_id][bank_id].count(row_id)) {
+      } else if (m_command_meta.at(command).is_closing || m_command_meta.at(command).is_refreshing) {
+          if (bg_id == -1 && bank_id == -1) {  // all bank closes
+            for (int b = 0; b < m_num_banks; b++) {
+              for (int bg = 0; bg < m_num_bankgroups; bg++) {
+                // Row is being closed
+                if (row_curr_open_times[channel_id][rank_id][bg][b].count(row_id)) {
+                  size_t duration = m_clk - row_curr_open_times[channel_id][rank_id][bg][b][row_id];
+                  // Accumulate the total duration for the row
+                  row_durations[channel_id][rank_id][bg][b][row_id] += duration;
+                  // Update total row open duration
+                  s_total_row_open_duration += duration;
+                  // Remove the row from the open times map
+                  row_curr_open_times[channel_id][rank_id][bg][b].erase(row_id);
+
+                  // std::cout << "Row " << row_id << " in bank " << b
+                  //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                  //           << " closed at cycle " << m_clk
+                  //           << " (open for " << duration << " cycles)" << std::endl;
+                }
+              }
+            }
+          } 
+          else if (bg_id == -1) {  // same bank closes
+            for (int bg = 0; bg < m_num_bankgroups; bg++) {
+              // Row is being closed
+              if (row_curr_open_times[channel_id][rank_id][bg][bank_id].count(row_id)) {
+                size_t duration = m_clk - row_curr_open_times[channel_id][rank_id][bg][bank_id][row_id];
+                // Accumulate the total duration for the row
+                row_durations[channel_id][rank_id][bg][bank_id][row_id] += duration;
+                // Update total row open duration
+                s_total_row_open_duration += duration;
+                // Remove the row from the open times map
+                row_curr_open_times[channel_id][rank_id][bg][bank_id].erase(row_id);
+
+                // std::cout << "Row " << row_id << " in bank " << bank_id
+                //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                //           << " closed at cycle " << m_clk
+                //           << " (open for " << duration << " cycles)" << std::endl;
+              } 
+            }
+          } 
+          else {  // single bank closes  (PRE, VRR, RDA, WRA)
+            // Row is being closed
+            if (row_curr_open_times[channel_id][rank_id][bg_id][bank_id].count(row_id)) {
               size_t duration = m_clk - row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id];
               // Accumulate the total duration for the row
               row_durations[channel_id][rank_id][bg_id][bank_id][row_id] += duration;
@@ -340,11 +385,9 @@ class DDR5_EK : public IDRAM, public Implementation {
               //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
               //           << " closed at cycle " << m_clk
               //           << " (open for " << duration << " cycles)" << std::endl;
-          } else {//TODO: probably not an error but just a refresh or something like that
-              // std::cerr << "Error: Attempted to close a row that was not open!" << std::endl;
+            }
           }
-      }
-
+        }
       // Check if the command requires future action
       check_future_action(command, addr_vec);
     };
@@ -704,6 +747,13 @@ class DDR5_EK : public IDRAM, public Implementation {
       for (int r = 0; r < num_channels * num_ranks; r++) {
         register_stat(s_total_rfm_cycles[r]).name("total_rfm_cycles_rank{}", r);
       }
+
+      // added by Elior
+      m_num_channels   = m_organization.count[m_levels["channel"]];
+      m_num_ranks      = m_organization.count[m_levels["rank"]];
+      m_num_bankgroups = m_organization.count[m_levels["bankgroup"]];
+      m_num_banks      = m_organization.count[m_levels["bank"]];
+      m_num_rows       = m_organization.count[m_levels["row"]];
     };
 
     void set_timing_vals() {
