@@ -216,6 +216,7 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           if (m_dram->m_command_meta(req_it->command).is_opening) {
             if (m_active_buffer.enqueue(*req_it)) {
               buffer->remove(req_it);
+              print_active_buffer(m_active_buffer); // added by Elior
             }
           }
         }
@@ -408,6 +409,28 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
       s_priority_queue_len_avg = (float) s_priority_queue_len / (float) m_clk;
 
       return;
+    }
+
+    // added by Elior
+    void print_active_buffer(const ReqBuffer& in_buffer) {
+        std::cout << "[Active Buffer] Size: " << in_buffer.size() << std::endl;
+        for (auto it = in_buffer.buffer.begin(); it != in_buffer.buffer.end(); ++it) {
+            const auto& req = *it;
+            std::cout << "  Req: cmd=" << req.command << " addr=[";
+            // Print labeled address fields
+            for (size_t i = 0; i < req.addr_vec.size(); ++i) {
+                std::string level;
+                if (i < m_dram->m_levels.size()) {
+                    level = std::string(m_dram->m_levels.at(i));
+                } else {
+                    level = std::to_string(i);
+                }
+                std::cout << level << ":" << req.addr_vec[i] << " ";
+            }
+            std::cout << "] final_cmd=" << req.final_command
+                      << " type=" << req.type_id
+                      << std::endl;
+        }
     }
 
 };

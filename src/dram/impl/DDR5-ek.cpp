@@ -346,7 +346,7 @@ class DDR5_EK : public IDRAM, public Implementation {
                   std::cout << "Row " << row_id << " in bank " << b
                             << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
                             << " closed at cycle " << m_clk
-                            << " (open for " << duration << " cycles)" << std::endl;
+                            << " (open for " << duration << " cycles) (ab close)" << std::endl;
                 }
               }
             }
@@ -366,13 +366,14 @@ class DDR5_EK : public IDRAM, public Implementation {
                 std::cout << "Row " << row_id << " in bank " << bank_id
                           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
                           << " closed at cycle " << m_clk
-                          << " (open for " << duration << " cycles)" << std::endl;
+                          << " (open for " << duration << " cycles) (sb close)" << std::endl;
               } 
             }
           } 
           else {  // single bank closes  (PRE, VRR, RDA, WRA)
             // Row is being closed
             if (row_curr_open_times[channel_id][rank_id][bg_id][bank_id].count(row_id)) {
+            // if (row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id] != 0) {
               size_t duration = m_clk - row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id];
               // Accumulate the total duration for the row
               row_durations[channel_id][rank_id][bg_id][bank_id][row_id] += duration;
@@ -380,11 +381,12 @@ class DDR5_EK : public IDRAM, public Implementation {
               s_total_row_open_duration += duration;
               // Remove the row from the open times map
               row_curr_open_times[channel_id][rank_id][bg_id][bank_id].erase(row_id);
+              // row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id] = 0;
 
               std::cout << "Row " << row_id << " in bank " << bank_id
                         << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
                         << " closed at cycle " << m_clk
-                        << " (open for " << duration << " cycles)" << std::endl;
+                        << " (open for " << duration << " cycles) (single row close)" << std::endl;
             }
           }
         }
