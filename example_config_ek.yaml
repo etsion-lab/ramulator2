@@ -6,10 +6,10 @@ Frontend:
   ipc: 6
   inst_window_depth: 200
   clock_ratio: 1
-  num_expected_insts: 24000000000 #approx number of instructions to get to ~1s of simulation time
+  # num_expected_insts: 24000000000 #approx number of instructions to get to ~1s of simulation time
   # num_expected_insts: 100000000 #100mil
   # num_expected_insts: 10000000
-  # num_expected_insts: 500000
+  num_expected_insts: 5000
   traces: 
     # - /scratch/elior.k/cloudsuite-traces/in-memory-analytics-core-1/trace.cpu0
     # - /scratch/elior.k/ramulator2/example_inst.trace

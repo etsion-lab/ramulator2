@@ -326,9 +326,9 @@ class DDR5_EK : public IDRAM, public Implementation {
           row_last_open_cycle[channel_id][rank_id][bg_id][bank_id][row_id] = m_clk;
           row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id] = m_clk;
 
-          // std::cout << "Row " << row_id << " in bank " << bank_id
-          //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
-          //           << " opened at cycle " << m_clk << std::endl;
+          std::cout << "Row " << row_id << " in bank " << bank_id
+                    << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
+                    << " opened at cycle " << m_clk << std::endl;
       } else if (m_command_meta.at(command).is_closing || m_command_meta.at(command).is_refreshing) {
           if (bg_id == -1 && bank_id == -1) {  // all bank closes
             for (int b = 0; b < m_num_banks; b++) {
@@ -343,10 +343,10 @@ class DDR5_EK : public IDRAM, public Implementation {
                   // Remove the row from the open times map
                   row_curr_open_times[channel_id][rank_id][bg][b].erase(row_id);
 
-                  // std::cout << "Row " << row_id << " in bank " << b
-                  //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
-                  //           << " closed at cycle " << m_clk
-                  //           << " (open for " << duration << " cycles)" << std::endl;
+                  std::cout << "Row " << row_id << " in bank " << b
+                            << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                            << " closed at cycle " << m_clk
+                            << " (open for " << duration << " cycles)" << std::endl;
                 }
               }
             }
@@ -363,10 +363,10 @@ class DDR5_EK : public IDRAM, public Implementation {
                 // Remove the row from the open times map
                 row_curr_open_times[channel_id][rank_id][bg][bank_id].erase(row_id);
 
-                // std::cout << "Row " << row_id << " in bank " << bank_id
-                //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
-                //           << " closed at cycle " << m_clk
-                //           << " (open for " << duration << " cycles)" << std::endl;
+                std::cout << "Row " << row_id << " in bank " << bank_id
+                          << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                          << " closed at cycle " << m_clk
+                          << " (open for " << duration << " cycles)" << std::endl;
               } 
             }
           } 
@@ -381,10 +381,10 @@ class DDR5_EK : public IDRAM, public Implementation {
               // Remove the row from the open times map
               row_curr_open_times[channel_id][rank_id][bg_id][bank_id].erase(row_id);
 
-              // std::cout << "Row " << row_id << " in bank " << bank_id
-              //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
-              //           << " closed at cycle " << m_clk
-              //           << " (open for " << duration << " cycles)" << std::endl;
+              std::cout << "Row " << row_id << " in bank " << bank_id
+                        << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
+                        << " closed at cycle " << m_clk
+                        << " (open for " << duration << " cycles)" << std::endl;
             }
           }
         }
