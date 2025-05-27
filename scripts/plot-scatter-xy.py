@@ -41,8 +41,8 @@ def sampleXY(nsamples, xarray, yarray):
 
 def build_parser():
     parser = argparse.ArgumentParser(
-                        prog='plotlines',
-                        description='plot lines from columnar files')
+                        prog='plotscatter',
+                        description='plot scatter from columnar files')
 
     parser.add_argument('-s', '--samples',
                         type=int,
