@@ -34,9 +34,12 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     std::string m_file_path_str;
     int64_t m_asid = 0;
     std::unique_ptr<PopenIstream> m_trace_file;
+    bool m_cows_accel_zero_page;
+
+    static const size_t INST_READ_BATCH = 100000;
 
     public:
-      Trace(std::string file_path_str);
+      Trace(std::string file_path_str, bool cows_accel_zero_page);
       const Inst& get_next_inst();
       bool read_next_inst();
 
@@ -135,7 +138,7 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     Clk_t  s_mem_access_cycles = 0;
 
   public:
-    SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, ITranslation* translation, SimpleO3LLC* llc);
+    SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc);
 
     /**
      * @brief   Ticks the core.

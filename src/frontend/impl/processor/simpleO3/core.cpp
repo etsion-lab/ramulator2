@@ -16,9 +16,9 @@ namespace fs = std::filesystem;
 
 uint32_t SimpleO3Core::Trace::dram_page_bytes = 8192;
 
-
-SimpleO3Core::Trace::Trace(std::string file_path_str) {
+SimpleO3Core::Trace::Trace(std::string file_path_str, bool cows_accel_zero_page) {
   m_file_path_str = file_path_str;
+  m_cows_accel_zero_page = cows_accel_zero_page;
 
   // search for app ID
   std::vector<std::string> path_tokens;
@@ -51,55 +51,61 @@ SimpleO3Core::Trace::Trace(std::string file_path_str) {
 bool SimpleO3Core::Trace::read_next_inst()
 {
   std::string line;
-  const std::regex comment_regex(" *#.*$");
 
   std::getline(*m_trace_file, line);
   std::vector<std::string> tokens;
 
-  // remove comments (try to avoid regexp since it seems to run slower)
-//    line = std::regex_replace(line, comment_regex, "");
-  size_t pos;
-  if( ((pos = line.find("  #")) != std::string::npos) ||
-      ((pos = line.find(" #")) != std::string::npos) ||
-      ((pos = line.find("#")) != std::string::npos)) {
-    line.resize(pos);
+  // get inst tpe and remove comments (try to avoid regexp since it seems to run slower)
+  size_t type_pos = line.find("(");
+  bool is_write_inject = (line[type_pos+1] == 'W' && line[type_pos+1] == 'I');
+
+  // if it's a zero page copy instruction and we're accelerating that, skip the rest of the parsing
+  if(!(is_write_inject && m_cows_accel_zero_page)) {
+    size_t comment_pos;
+    if( ((comment_pos = line.find("  #")) != std::string::npos) ||
+        ((comment_pos = line.find(" #")) != std::string::npos) ||
+        ((comment_pos = line.find("#")) != std::string::npos)) {
+      line.resize(comment_pos);
+    }
+    tokenize(tokens, line, " ");
+
+    int num_tokens = tokens.size();
+
+    if (num_tokens != 2 & num_tokens != 3) {
+      throw ConfigurationError("Trace {} format invalid!", m_file_path_str);
+    }
+    int bubble_count = std::stoi(tokens[0]);
+
+    Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
+    load_addr += get_aslr_offset(m_asid);
+    assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
+    load_addr = addr_set_asid(load_addr, m_asid); // add ASID to the address
+
+    bool has_store = num_tokens == 2 ? false : true;
+    if (has_store) {
+      Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
+      store_addr += get_aslr_offset(m_asid);
+      assert(addr_get_asid(store_addr) == 0);
+      store_addr = addr_set_asid(store_addr, m_asid);  // add ASID to the address
+
+      m_trace.push_back({bubble_count, load_addr, store_addr});
+    } else {
+      m_trace.push_back({bubble_count, load_addr, -1});
+    }
   }
-  tokenize(tokens, line, " ");
-
-  int num_tokens = tokens.size();
-
-  if (num_tokens != 2 & num_tokens != 3) {
-    throw ConfigurationError("Trace {} format invalid!", m_file_path_str);
-  }
-  int bubble_count = std::stoi(tokens[0]);
-
-  Addr_t load_addr = std::stoll(tokens[1], nullptr, 0);
-  load_addr += get_aslr_offset(m_asid);
-  assert(addr_get_asid(load_addr) == 0); // make sure the ASID bits are 0.
-  load_addr = addr_set_asid(load_addr, m_asid); // add ASID to the address
-
-  bool has_store = num_tokens == 2 ? false : true;
-  if (has_store) {
-    Addr_t store_addr = std::stoll(tokens[2], nullptr, 0);
-    store_addr += get_aslr_offset(m_asid);
-    assert(addr_get_asid(store_addr) == 0);
-    store_addr = addr_set_asid(store_addr, m_asid);  // add ASID to the address
-
-    m_trace.push_back({bubble_count, load_addr, store_addr});
-  } else {
-    m_trace.push_back({bubble_count, load_addr, -1});
-  }
-
   return !m_trace_file->fail();
 }
 
 
 const SimpleO3Core::Trace::Inst& SimpleO3Core::Trace::get_next_inst() {
-  // do we need to read the next instruction from file?
-  if(m_trace_file != nullptr) {
-    if(!read_next_inst()) {
-      // just read the last instruction
-      m_trace_file.reset(); // frees trace file and makes unique_ptr==nullptr
+  // do we need to read the next instructions from file? (end of the current inst. trace and more insts in the file)
+  if((m_trace_length == 0) || ((m_curr_trace_idx == (m_trace_length-1)) && (m_trace_file != nullptr))) {
+    for(int i=0; i<INST_READ_BATCH; i++) { // read up to 1k instructions
+      if(!read_next_inst()) {
+        // just read the last instruction
+        m_trace_file.reset(); // frees trace file and makes unique_ptr==nullptr
+        break;
+      }
     }
     m_trace_length = m_trace.size();
   }
@@ -156,8 +162,8 @@ void SimpleO3Core::InstWindow::set_ready(Addr_t addr) {
   }
 }
 
-SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, ITranslation* translation, SimpleO3LLC* llc):
-m_id(id), m_window(ipc, depth), m_trace(trace_path), m_num_expected_insts(num_expected_insts), m_translation(translation), m_llc(llc) {
+SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc)
+  : m_id(id), m_window(ipc, depth), m_trace(trace_path, cows_accel_zero_page), m_num_expected_insts(num_expected_insts), m_translation(translation), m_llc(llc) {
   // Fetch the instructions and addresses for tick 0
   auto inst = m_trace.get_next_inst();
   m_num_bubbles = inst.bubble_count;
