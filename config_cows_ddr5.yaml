@@ -3,45 +3,39 @@ Frontend:
   ipc: 6
   inst_window_depth: 200
   clock_ratio: 1
-#  num_expected_insts: 1600000000
-  num_expected_insts: 100000000
+  num_expected_insts: 100000000    # 100M
+#  num_expected_insts: 300000000    # 300M
+#  num_expected_insts: 1000000000    # 1G
+#  num_expected_insts: 10000000000  # 10G
+#  num_expected_insts: 20000000000  # 20G
 #  num_expected_insts: 1000000 # testing
   traces:
-  - trace-in-memory-analytics-core-1:0
-  - trace-in-memory-analytics-core-1:1
-  - trace-in-memory-analytics-core-1:2
-  - trace-in-memory-analytics-core-1:3
+    TRACES
+#  - traces/in-memory-analytics-core-1/trace.cpu0:0
+#  - traces/in-memory-analytics-core-1/trace.cpu0:1
+#  - traces/in-memory-analytics-core-1/trace.cpu0:2
+#  - traces/in-memory-analytics-core-1/trace.cpu0:3
 #  - trace-in-memory-analytics-core-1:4
-#  - trace-in-memory-analytics-core-1:5
-#  - trace-in-memory-analytics-core-1:6
-#  - trace-in-memory-analytics-core-1:7
-#  - trace-in-memory-analytics-core-1:8
-#  - trace-in-memory-analytics-core-1:9
-#  - trace-in-memory-analytics-core-1:10
-#  - trace-in-memory-analytics-core-1:11
-#  - trace-in-memory-analytics-core-1:12
-#  - trace-in-memory-analytics-core-1:13
-#  - trace-in-memory-analytics-core-1:14
-#  - trace-in-memory-analytics-core-1:15
 
   llc_latency: 50
   llc_linesize: 64
   llc_associativity: 8
   llc_num_mshr_per_core: 16
-  llc_capacity_per_core: 4MB
+  llc_capacity_per_core: 2MB
 
-  cows_dram_latency_on_translation: 200
-  cows_cache_access_latency: 10
-  cows_cache2llc_ratio: 1
+  cows_enable: true
+  cows_accel_zero_page: true
+  cows_dram_latency_on_translation: 134
+  cows_cache_access_latency: 8
+  cows_cache2llc_ratio: 8
   cows_cache_assoc: 8
   dram_page_bytes: 8KB
-  cows_stats_file: cows_stats.out
+  cows_stats_file: cows_stats
+  cows_replacement: LRU_nohit
 
   Translation:
-#    impl: RandomTranslation
     impl: NoTranslation
     max_addr: 9223372036854775807
-#    max_addr: 2147483648
 
 
 MemorySystem:
