@@ -1,5 +1,8 @@
 #include "dram_controller/controller.h"
 #include "memory_system/memory_system.h"
+#include <map>
+#include <fstream>
+#include <sys/stat.h> // for mkdir
 
 namespace Ramulator {
 
@@ -48,6 +51,11 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
 
     size_t s_read_latency = 0;
     float s_avg_read_latency = 0;
+
+    //added by elior
+    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_cycle;
+    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_duration;
+    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_count;
 
 
   public:
@@ -203,6 +211,28 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
         }
         m_dram->issue_command(req_it->command, req_it->addr_vec);
 
+        // Added by Elior for debug
+        int channel = req_it->addr_vec[0];
+        int rank = req_it->addr_vec[1];
+        int bg = req_it->addr_vec[2];
+        int bank = req_it->addr_vec[3];
+        int row = req_it->addr_vec[4];
+
+        if (m_dram->m_command_meta(req_it->command).is_opening) {
+            // Row is being opened
+            row_open_cycle[channel][rank][bg][bank][row] = m_clk;
+            row_open_count[channel][rank][bg][bank][row]++;
+        } else if (m_dram->m_command_meta(req_it->command).is_closing) {
+            // Row is being closed
+            if (row_open_cycle[channel][rank][bg][bank].count(row)) {
+                size_t open_cycle = row_open_cycle[channel][rank][bg][bank][row];
+                size_t duration = m_clk - open_cycle;
+                row_open_duration[channel][rank][bg][bank][row] += duration;
+                row_open_cycle[channel][rank][bg][bank].erase(row);
+            }
+        }
+        /////////////////////
+
         // If we are issuing the last command, set depart clock cycle and move the request to the pending queue
         if (req_it->command == req_it->final_command) {
           if (req_it->type_id == Request::Type::Read) {
@@ -253,40 +283,114 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
      */
     void update_request_stats(ReqBuffer::iterator& req)
     {
-      req->is_stat_updated = true;
+        req->is_stat_updated = true;
 
-      if (req->type_id == Request::Type::Read) 
-      {
-        if (is_row_hit(req)) {
-          s_read_row_hits++;
-          s_row_hits++;
-          if (req->source_id != -1)
-            s_read_row_hits_per_core[req->source_id]++;
-        } else if (is_row_open(req)) {
-          s_read_row_conflicts++;
-          s_row_conflicts++;
-          if (req->source_id != -1)
-            s_read_row_conflicts_per_core[req->source_id]++;
-        } else {
-          s_read_row_misses++;
-          s_row_misses++;
-          if (req->source_id != -1)
-            s_read_row_misses_per_core[req->source_id]++;
+        int channel = req->addr_vec[0];
+        int rank = req->addr_vec[1];
+        int bg = req->addr_vec[2];
+        int bank = req->addr_vec[3];
+        int row = req->addr_vec[4];
+
+        bool is_target = req->addr_vec.size() > 4 &&
+                         channel == 0 && rank == 0 && bg == 0 && bank == 0;
+
+        if (req->type_id == Request::Type::Read)
+        {
+            if (is_row_hit(req)) {
+                if (is_target)
+                    std::cout << "[DEBUG] Row HIT for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_read_row_hits++;
+                s_row_hits++;
+                if (req->source_id != -1)
+                    s_read_row_hits_per_core[req->source_id]++;
+            } else if (is_row_open(req)) {
+                if (is_target)
+                    std::cout << "[DEBUG] Row CONFLICT for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_read_row_conflicts++;
+                s_row_conflicts++;
+                if (req->source_id != -1)
+                    s_read_row_conflicts_per_core[req->source_id]++;
+
+                // Row conflict: close the previously open row
+                // Find the currently open row for this bank
+                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
+                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                        int open_row = it->first;
+                        size_t open_cycle = it->second;
+                        size_t duration = m_clk - open_cycle;
+                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
+                        row_open_count[channel][rank][bg][bank][open_row]++;
+                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                    }
+                }
+            } else {
+                if (is_target)
+                    std::cout << "[DEBUG] Row MISS for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_read_row_misses++;
+                s_row_misses++;
+                if (req->source_id != -1)
+                    s_read_row_misses_per_core[req->source_id]++;
+
+                // Row miss: close the previously open row (if any)
+                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
+                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                        int open_row = it->first;
+                        size_t open_cycle = it->second;
+                        size_t duration = m_clk - open_cycle;
+                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
+                        row_open_count[channel][rank][bg][bank][open_row]++;
+                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                    }
+                }
+            }
         } 
-      } 
-      else if (req->type_id == Request::Type::Write) 
-      {
-        if (is_row_hit(req)) {
-          s_write_row_hits++;
-          s_row_hits++;
-        } else if (is_row_open(req)) {
-          s_write_row_conflicts++;
-          s_row_conflicts++;
-        } else {
-          s_write_row_misses++;
-          s_row_misses++;
+        else if (req->type_id == Request::Type::Write) 
+        {
+            if (is_row_hit(req)) {
+                if (is_target)
+                    std::cout << "[DEBUG] Row HIT for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_write_row_hits++;
+                s_row_hits++;
+            } else if (is_row_open(req)) {
+                if (is_target)
+                    std::cout << "[DEBUG] Row CONFLICT for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_write_row_conflicts++;
+                s_row_conflicts++;
+
+                // Row conflict: close the previously open row
+                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
+                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                        int open_row = it->first;
+                        size_t open_cycle = it->second;
+                        size_t duration = m_clk - open_cycle;
+                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
+                        row_open_count[channel][rank][bg][bank][open_row]++;
+                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                    }
+                }
+            } else {
+                if (is_target)
+                    std::cout << "[DEBUG] Row MISS for ch0 rank0 bg0 bank0 row " << row << std::endl;
+                s_write_row_misses++;
+                s_row_misses++;
+
+                // Row miss: close the previously open row (if any)
+                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
+                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                        int open_row = it->first;
+                        size_t open_cycle = it->second;
+                        size_t duration = m_clk - open_cycle;
+                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
+                        row_open_count[channel][rank][bg][bank][open_row]++;
+                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                    }
+                }
+            }
         }
-      }
     }
 
     /**
@@ -402,12 +506,13 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
 
     void finalize() override {
       s_avg_read_latency = (float) s_read_latency / (float) s_num_read_reqs;
-
       s_queue_len_avg = (float) s_queue_len / (float) m_clk;
       s_read_queue_len_avg = (float) s_read_queue_len / (float) m_clk;
       s_write_queue_len_avg = (float) s_write_queue_len / (float) m_clk;
       s_priority_queue_len_avg = (float) s_priority_queue_len / (float) m_clk;
 
+      if (m_channel_id == 0) export_histograms_to_csv(); // added by Elior for DEBUG
+      
       return;
     }
 
@@ -432,6 +537,42 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
                       << std::endl;
         }
     }
+    
+    // Added by Elior for debug
+    void ensure_directory_exists(const std::string& dir) {
+        struct stat info;
+        if (stat(dir.c_str(), &info) != 0) {
+            mkdir(dir.c_str(), 0777);
+        }
+    }
+
+    void export_histograms_to_csv() {
+        std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
+        ensure_directory_exists(output_dir);
+        std::string output_file = output_dir + "/row_histograms_generic_controller.csv";
+        std::ofstream csv_file(output_file);
+
+        csv_file << "Channel,Rank,BankGroup,Bank,Row,AvgOpenDuration,OpenCount\n";
+        for (const auto& [channel, ranks] : row_open_duration) {
+            for (const auto& [rank, bgs] : ranks) {
+                if (rank != 0) continue; // Only rank 0
+                for (const auto& [bg, banks] : bgs) {
+                    if (bg != 0) continue; // Only bank group 0
+                    for (const auto& [bank, rows] : banks) {
+                        for (const auto& [row, total_duration] : rows) {
+                            size_t count = row_open_count[channel][rank][bg][bank][row];
+                            double avg = count ? double(total_duration) / count : 0.0;
+                            csv_file << channel << "," << rank << "," << bg << "," << bank << "," << row << ","
+                                     << avg << "," << count << "\n";
+                        }
+                    }
+                }
+            }
+        }
+        csv_file.close();
+        std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
+    }
+    ////////////////////////////
 
 };
   

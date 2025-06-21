@@ -3,17 +3,18 @@ import sys
 from collections import defaultdict
 import pandas as pd
 
-def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=None, target_channel=None):
+def parse_dram_log(log_content, target_channel=None, target_rank=None, target_bankgroup=None, target_bank=None):
     """
-    Parses the DRAM log content to extract row open/close events and active buffer states,
-    optionally filtering by specific bank, bankgroup, rank, and channel IDs for row events.
+    Parses the DRAM log content to extract row open/close events, active buffer states,
+    and debug events (HIT, MISS, CONFLICT), filtering all by specific channel, rank,
+    bankgroup, and bank IDs.
 
     Args:
         log_content (str): The full text content of the DRAM log file.
-        target_bank (int, optional): The bank ID to filter row events by. Defaults to None (no filter).
-        target_bg (int, optional): The bankgroup ID to filter row events by. Defaults to None (no filter).
-        target_rank (int, optional): The rank ID to filter row events by. Defaults to None (no filter).
-        target_channel (int, optional): The channel ID to filter row events by. Defaults to None (no filter).
+        target_channel (int, optional): The channel ID to filter by. Defaults to None (no filter).
+        target_rank (int, optional): The rank ID to filter by. Defaults to None (no filter).
+        target_bankgroup (int, optional): The bankgroup ID to filter by. Defaults to None (no filter).
+        target_bank (int, optional): The bank ID to filter by. Defaults to None (no filter).
 
     Returns:
         tuple: A tuple containing:
@@ -22,12 +23,17 @@ def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=No
                     and values are lists of (event_type, cycle) tuples.
             - dict: A dictionary of rows that are currently open at the
                     end of the log, with their open cycle.
-            - list: A list of dictionaries, each representing an active buffer state
-                    at a specific cycle, with details of requests in it.
+            - list: A list of dictionaries, each representing a chronological event
+                    (row open/close, buffer snapshot, debug event).
     """
     row_history = defaultdict(list)
-    open_rows = {}
-    active_buffer_snapshots = []
+    
+    # Dictionary to keep track of currently open rows for conflict detection:
+    # Key: (channel, rank, bankgroup, bank)
+    # Value: {'row_id': int, 'open_cycle': int, 'full_id': str}
+    open_rows_state = {} 
+    
+    all_events = [] # To store all parsed events chronologically
 
     # Regex for row open/close events
     row_pattern = re.compile(
@@ -42,11 +48,23 @@ def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=No
         r"Req: cmd=(\d+) addr=\[channel:(\d+) rank:(\d+) bankgroup:(\d+) bank:(\d+) row:(\d+) column:(\d+) \] final_cmd=(\d+) type=(\d+)"
     )
 
+    # Regex for debug events (HIT, MISS, CONFLICT)
+    debug_pattern = re.compile(
+        r"\[DEBUG\] Row (HIT|MISS|CONFLICT) for ch(\d+) rank(\d+) bg(\d+) bank(\d+) row (\d+)"
+    )
+
     current_cycle = -1
     expecting_requests = False
     current_active_buffer_requests = []
     
     for line in log_content.splitlines():
+        # Update current_cycle from any line that contains a cycle number
+        # This is a heuristic, assuming cycle numbers are generally increasing.
+        # More robust would be to parse cycle from every line type.
+        cycle_match = re.search(r"at cycle (\d+)", line)
+        if cycle_match:
+            current_cycle = int(cycle_match.group(1))
+
         # Try to parse row events first
         row_match = row_pattern.match(line)
         if row_match:
@@ -54,46 +72,58 @@ def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=No
             # it means the previous active buffer snapshot has ended.
             if expecting_requests and current_active_buffer_requests is not None:
                 if current_cycle != -1: # Ensure we have a valid cycle for the snapshot
-                    active_buffer_snapshots.append({
-                        "cycle": current_cycle,
-                        "requests": list(current_active_buffer_requests) # Store a copy
-                    })
+                    # Filter requests for the snapshot based on target filters before appending
+                    filtered_requests_for_snapshot = []
+                    for req in current_active_buffer_requests:
+                        if (target_channel is None or req['channel'] == target_channel) and \
+                           (target_rank is None or req['rank'] == target_rank) and \
+                           (target_bankgroup is None or req['bankgroup'] == target_bankgroup) and \
+                           (target_bank is None or req['bank'] == target_bank):
+                            filtered_requests_for_snapshot.append(req)
+                    
+                    if filtered_requests_for_snapshot: # Only add snapshot if it contains filtered requests
+                        all_events.append({
+                            'type': 'buffer_snapshot',
+                            'cycle': current_cycle,
+                            'data': {'requests': filtered_requests_for_snapshot}
+                        })
                 current_active_buffer_requests = []
                 expecting_requests = False
 
             # Process row event
             row_id_str, bank_str, bg_str, rank_str, channel_str, event_type, cycle_str, _ = row_match.groups()
             
+            # Convert extracted string values to integers for comparison
             bank = int(bank_str)
             bg = int(bg_str)
             rank = int(rank_str)
             channel = int(channel_str)
             cycle = int(cycle_str)
 
-            # Update current_cycle based on the most recent event's cycle
-            current_cycle = cycle
-
-            # Apply filters for row events
-            if target_bank is not None and bank != target_bank:
-                continue
-            if target_bg is not None and bg != target_bg:
-                continue
-            if target_rank is not None and rank != target_rank:
-                continue
-            if target_channel is not None and channel != target_channel:
-                continue
-
+            unique_location_tuple = (channel, rank, bg, bank)
             unique_row_identifier = (
                 f"Row {row_id_str}, bank {bank_str}, bg {bg_str}, rank {rank_str}, channel {channel_str}"
             )
 
+            # Apply filters for row events
+            if target_channel is not None and channel != target_channel:
+                continue
+            if target_rank is not None and rank != target_rank:
+                continue
+            if target_bankgroup is not None and bg != target_bankgroup:
+                continue
+            if target_bank is not None and bank != target_bank:
+                continue
+
             if event_type == "opened":
                 row_history[unique_row_identifier].append(("opened", cycle))
-                open_rows[unique_row_identifier] = cycle
+                open_rows_state[unique_location_tuple] = {'row_id': int(row_id_str), 'open_cycle': cycle, 'full_id': unique_row_identifier}
+                all_events.append({'type': 'row_open', 'cycle': cycle, 'data': {'row_id': unique_row_identifier}})
             elif event_type == "closed":
                 row_history[unique_row_identifier].append(("closed", cycle))
-                if unique_row_identifier in open_rows:
-                    del open_rows[unique_row_identifier]
+                if unique_location_tuple in open_rows_state:
+                    del open_rows_state[unique_location_tuple]
+                all_events.append({'type': 'row_close', 'cycle': cycle, 'data': {'row_id': unique_row_identifier}})
             continue # Move to next line after processing row event
 
         # Try to parse active buffer header
@@ -102,27 +132,45 @@ def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=No
             # If we find a new header, it means the previous snapshot is complete
             if expecting_requests and current_active_buffer_requests is not None:
                 if current_cycle != -1:
-                    active_buffer_snapshots.append({
-                        "cycle": current_cycle,
-                        "requests": list(current_active_buffer_requests)
-                    })
+                    # Filter requests for the snapshot based on target filters before appending
+                    filtered_requests_for_snapshot = []
+                    for req in current_active_buffer_requests:
+                        if (target_channel is None or req['channel'] == target_channel) and \
+                           (target_rank is None or req['rank'] == target_rank) and \
+                           (target_bankgroup is None or req['bankgroup'] == target_bankgroup) and \
+                           (target_bank is None or req['bank'] == target_bank):
+                            filtered_requests_for_snapshot.append(req)
+                    
+                    if filtered_requests_for_snapshot: # Only add snapshot if it contains filtered requests
+                        all_events.append({
+                            'type': 'buffer_snapshot',
+                            'cycle': current_cycle,
+                            'data': {'requests': filtered_requests_for_snapshot}
+                        })
             current_active_buffer_requests = [] # Reset for new snapshot
             expecting_requests = True
-            # The cycle for this snapshot is usually the cycle of the *preceding* Row event.
-            # We assume current_cycle is updated by the last row event.
             continue
 
         # If we are expecting requests, try to parse request lines
         if expecting_requests:
             request_match = request_pattern.match(line.strip())
             if request_match:
-                cmd, channel, rank, bg, bank, row, column, final_cmd, req_type = request_match.groups()
+                cmd, channel_str, rank_str, bg_str, bank_str, row, column, final_cmd, req_type = request_match.groups()
+                
+                # Convert extracted string values to integers for filtering
+                req_channel = int(channel_str)
+                req_rank = int(rank_str)
+                req_bg = int(bg_str)
+                req_bank = int(bank_str)
+
+                # Apply filters for active buffer requests (store all matching requests for the current snapshot)
+                # Filtering logic is moved to when the snapshot is actually appended to all_events
                 current_active_buffer_requests.append({
                     "cmd": int(cmd),
-                    "channel": int(channel),
-                    "rank": int(rank),
-                    "bankgroup": int(bg),
-                    "bank": int(bank),
+                    "channel": req_channel,
+                    "rank": req_rank,
+                    "bankgroup": req_bg,
+                    "bank": req_bank,
                     "row": int(row),
                     "column": int(column),
                     "final_cmd": int(final_cmd),
@@ -133,31 +181,100 @@ def parse_dram_log(log_content, target_bank=None, target_bg=None, target_rank=No
                 # it means the active buffer snapshot has ended.
                 if current_active_buffer_requests: # Only add if there were requests
                     if current_cycle != -1:
-                        active_buffer_snapshots.append({
-                            "cycle": current_cycle,
-                            "requests": list(current_active_buffer_requests)
-                        })
+                        # Filter requests for the snapshot based on target filters before appending
+                        filtered_requests_for_snapshot = []
+                        for req in current_active_buffer_requests:
+                            if (target_channel is None or req['channel'] == target_channel) and \
+                               (target_rank is None or req['rank'] == target_rank) and \
+                               (target_bankgroup is None or req['bankgroup'] == target_bankgroup) and \
+                               (target_bank is None or req['bank'] == target_bank):
+                                filtered_requests_for_snapshot.append(req)
+                        
+                        if filtered_requests_for_snapshot: # Only add snapshot if it contains filtered requests
+                            all_events.append({
+                                'type': 'buffer_snapshot',
+                                'cycle': current_cycle,
+                                'data': {'requests': filtered_requests_for_snapshot}
+                            })
                 current_active_buffer_requests = []
                 expecting_requests = False
+            continue
+
+        # New: Debug events (HIT, MISS, CONFLICT)
+        debug_match = debug_pattern.match(line)
+        if debug_match:
+            event_type, ch_str, rk_str, bg_str, bk_str, row_str = debug_match.groups()
+            
+            # Convert extracted string values to integers for filtering
+            ch = int(ch_str)
+            rk = int(rk_str)
+            bg = int(bg_str)
+            bk = int(bk_str)
+            row = int(row_str)
+
+            debug_data = {
+                'event': event_type,
+                'channel': ch,
+                'rank': rk,
+                'bankgroup': bg,
+                'bank': bk,
+                'row': row
+            }
+            
+            # Apply filters for debug events
+            if target_channel is not None and ch != target_channel:
+                continue
+            if target_rank is not None and rk != target_rank:
+                continue
+            if target_bankgroup is not None and bg != target_bankgroup:
+                continue
+            if target_bank is not None and bk != target_bank:
+                continue
+
+            if event_type == "CONFLICT":
+                location_tuple = (ch, rk, bg, bk)
+                if location_tuple in open_rows_state:
+                    debug_data['conflicting_open_row'] = open_rows_state[location_tuple]['full_id']
+                    debug_data['conflicting_open_row_cycle'] = open_rows_state[location_tuple]['open_cycle']
+                else:
+                    debug_data['conflicting_open_row'] = "N/A (no row found open at this location)"
+                    debug_data['conflicting_open_row_cycle'] = "N/A"
+
+            all_events.append({'type': 'debug_event', 'cycle': current_cycle, 'data': debug_data})
+            continue
 
     # After the loop, add any remaining active buffer requests
     if expecting_requests and current_active_buffer_requests:
         if current_cycle != -1:
-            active_buffer_snapshots.append({
-                "cycle": current_cycle,
-                "requests": list(current_active_buffer_requests)
-            })
+            # Filter requests for the snapshot based on target filters before appending
+            filtered_requests_for_snapshot = []
+            for req in current_active_buffer_requests:
+                if (target_channel is None or req['channel'] == target_channel) and \
+                   (target_rank is None or req['rank'] == target_rank) and \
+                   (target_bankgroup is None or req['bankgroup'] == target_bankgroup) and \
+                   (target_bank is None or req['bank'] == target_bank):
+                    filtered_requests_for_snapshot.append(req)
+            
+            if filtered_requests_for_snapshot: # Only add snapshot if it contains filtered requests
+                all_events.append({
+                    'type': 'buffer_snapshot',
+                    'cycle': current_cycle,
+                    'data': {'requests': filtered_requests_for_snapshot}
+                })
 
-    return row_history, open_rows, active_buffer_snapshots
+    # Final processing of open_rows for the summary table
+    final_open_rows_summary = {v['full_id']: v['open_cycle'] for k, v in open_rows_state.items()}
 
-def display_results(row_history, open_rows, active_buffer_snapshots, output_file=None):
+    return row_history, final_open_rows_summary, all_events
+
+def display_results(row_history, open_rows_summary, all_events, output_file=None):
     """
     Displays the parsing results in a user-friendly format.
 
     Args:
         row_history (dict): A dictionary of row histories.
-        open_rows (dict): A dictionary of rows currently open.
-        active_buffer_snapshots (list): A list of active buffer snapshots.
+        open_rows_summary (dict): A dictionary of rows currently open at the end of the run.
+        all_events (list): A list of all chronological events.
         output_file (str, optional): Path to the output file. If None, prints to console.
     """
     # Determine the output destination
@@ -173,9 +290,9 @@ def display_results(row_history, open_rows, active_buffer_snapshots, output_file
 
     # --- Part 1: Rows that remained open at the end of the run ---
     write_func("## Rows Remaining Open at the End of the Run")
-    if open_rows:
+    if open_rows_summary:
         open_data = []
-        for row_identifier, open_cycle in open_rows.items():
+        for row_identifier, open_cycle in open_rows_summary.items():
             open_data.append([row_identifier, open_cycle])
         
         # Create a DataFrame for better table representation
@@ -204,31 +321,42 @@ def display_results(row_history, open_rows, active_buffer_snapshots, output_file
         write_func("No row open/close history found in the log.")
     write_func("\n")
 
-    # --- Part 3: Active Buffer Snapshots ---
-    write_func("## Active Buffer Snapshots Throughout the Run")
-    if active_buffer_snapshots:
-        # Sort snapshots by cycle to ensure chronological order
-        active_buffer_snapshots.sort(key=lambda x: x['cycle'])
+    # --- Part 3: Chronological Log of Events (Filtered) ---
+    write_func("## Chronological Log of Events (Filtered)")
+    if all_events:
+        all_events.sort(key=lambda x: x['cycle']) # Ensure strict chronological order
 
-        for snapshot in active_buffer_snapshots:
-            write_func(f"--- Active Buffer at Cycle {snapshot['cycle']} ---")
-            if snapshot['requests']:
-                req_data = []
-                for req in snapshot['requests']:
-                    req_data.append([
-                        req['cmd'], req['channel'], req['rank'],
-                        req['bankgroup'], req['bank'], req['row'],
-                        req['column'], req['final_cmd'], req['type']
+        for event in all_events:
+            if event['type'] == 'row_open':
+                write_func(f"Cycle {event['cycle']}: Row OPENED - {event['data']['row_id']}")
+            elif event['type'] == 'row_close':
+                write_func(f"Cycle {event['cycle']}: Row CLOSED - {event['data']['row_id']}")
+            elif event['type'] == 'buffer_snapshot':
+                write_func(f"Cycle {event['cycle']}: Active Buffer Snapshot (Size: {len(event['data']['requests'])})")
+                if event['data']['requests']:
+                    req_data = []
+                    for req in event['data']['requests']:
+                        req_data.append([
+                            req['cmd'], req['channel'], req['rank'],
+                            req['bankgroup'], req['bank'], req['row'],
+                            req['column'], req['final_cmd'], req['type']
+                        ])
+                    req_df = pd.DataFrame(req_data, columns=[
+                        "Cmd", "Chan", "Rank", "BG", "Bank", "Row", "Col", "Final Cmd", "Type"
                     ])
-                req_df = pd.DataFrame(req_data, columns=[
-                    "Cmd", "Chan", "Rank", "BG", "Bank", "Row", "Col", "Final Cmd", "Type"
-                ])
-                write_func(req_df.to_markdown(index=False))
-            else:
-                write_func("  (No requests in buffer)")
+                    write_func(req_df.to_markdown(index=False))
+                else:
+                    write_func("  (No requests in buffer matching filter criteria)")
+            elif event['type'] == 'debug_event':
+                debug_data = event['data']
+                if debug_data['event'] == 'CONFLICT':
+                    write_func(f"Cycle {event['cycle']}: Row CONFLICT for ch{debug_data['channel']} rank{debug_data['rank']} bg{debug_data['bankgroup']} bank{debug_data['bank']} row {debug_data['row']}")
+                    write_func(f"  Currently open row in this location: {debug_data['conflicting_open_row']} (opened at cycle {debug_data['conflicting_open_row_cycle']})")
+                else:
+                    write_func(f"Cycle {event['cycle']}: Row {debug_data['event']} for ch{debug_data['channel']} rank{debug_data['rank']} bg{debug_data['bankgroup']} bank{debug_data['bank']} row {debug_data['row']}")
             write_func("\n")
     else:
-        write_func("No active buffer snapshots found in the log.")
+        write_func("No chronological events found in the log matching filter criteria.")
 
 
     if output_file:
@@ -245,7 +373,7 @@ if __name__ == "__main__":
 
     # Check for minimum arguments (script name + log file path)
     if len(sys.argv) < 2:
-        print("Usage: python dram_parser.py <log_file_path> [output_file_path] [--bank <id>] [--bg <id>] [--rank <id>] [--channel <id>]", file=sys.stderr)
+        print("Usage: python dram_parser.py <log_file_path> [output_file_path] [--channel <id>] [--rank <id>] [--bg <id>] [--bank <id>]", file=sys.stderr)
         sys.exit(1)
 
     log_file_path = sys.argv[1]
@@ -254,27 +382,16 @@ if __name__ == "__main__":
     i = 2
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg == "--bank":
+        if arg == "--channel":
             if i + 1 < len(sys.argv):
                 try:
-                    target_bank = int(sys.argv[i+1])
+                    target_channel = int(sys.argv[i+1])
                 except ValueError:
-                    print(f"Error: Invalid ID for --bank: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
+                    print(f"Error: Invalid ID for --channel: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
                     sys.exit(1)
                 i += 2
             else:
-                print("Error: --bank requires an argument.", file=sys.stderr)
-                sys.exit(1)
-        elif arg == "--bg":
-            if i + 1 < len(sys.argv):
-                try:
-                    target_bg = int(sys.argv[i+1])
-                except ValueError:
-                    print(f"Error: Invalid ID for --bg: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
-                    sys.exit(1)
-                i += 2
-            else:
-                print("Error: --bg requires an argument.", file=sys.stderr)
+                print("Error: --channel requires an argument.", file=sys.stderr)
                 sys.exit(1)
         elif arg == "--rank":
             if i + 1 < len(sys.argv):
@@ -287,16 +404,27 @@ if __name__ == "__main__":
             else:
                 print("Error: --rank requires an argument.", file=sys.stderr)
                 sys.exit(1)
-        elif arg == "--channel":
+        elif arg == "--bg":
             if i + 1 < len(sys.argv):
                 try:
-                    target_channel = int(sys.argv[i+1])
+                    target_bg = int(sys.argv[i+1])
                 except ValueError:
-                    print(f"Error: Invalid ID for --channel: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
+                    print(f"Error: Invalid ID for --bg: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
                     sys.exit(1)
                 i += 2
             else:
-                print("Error: --channel requires an argument.", file=sys.stderr)
+                print("Error: --bg requires an argument.", file=sys.stderr)
+                sys.exit(1)
+        elif arg == "--bank":
+            if i + 1 < len(sys.argv):
+                try:
+                    target_bank = int(sys.argv[i+1])
+                except ValueError:
+                    print(f"Error: Invalid ID for --bank: {sys.argv[i+1]}. Must be an integer.", file=sys.stderr)
+                    sys.exit(1)
+                i += 2
+            else:
+                print("Error: --bank requires an argument.", file=sys.stderr)
                 sys.exit(1)
         # Assuming the first argument after log_file_path that is not a flag is the output_file_path
         elif output_file_path is None and not arg.startswith("--"): 
@@ -317,11 +445,11 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Pass filter parameters to parse_dram_log
-    row_history, open_rows, active_buffer_snapshots = parse_dram_log(
+    row_history, open_rows_summary, all_events = parse_dram_log(
         log_content,
-        target_bank=target_bank,
-        target_bg=target_bg,
+        target_channel=target_channel,
         target_rank=target_rank,
-        target_channel=target_channel
+        target_bankgroup=target_bg,
+        target_bank=target_bank
     )
-    display_results(row_history, open_rows, active_buffer_snapshots, output_file_path)
+    display_results(row_history, open_rows_summary, all_events, output_file_path)
