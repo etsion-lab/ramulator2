@@ -326,9 +326,9 @@ class DDR5_EK : public IDRAM, public Implementation {
           row_last_open_cycle[channel_id][rank_id][bg_id][bank_id][row_id] = m_clk;
           row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id] = m_clk;
 
-          std::cout << "Row " << row_id << " in bank " << bank_id
-                    << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
-                    << " opened at cycle " << m_clk << std::endl;
+          // std::cout << "Row " << row_id << " in bank " << bank_id
+          //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
+          //           << " opened at cycle " << m_clk << std::endl;
       } else if (m_command_meta.at(command).is_closing || m_command_meta.at(command).is_refreshing) {
           if (bg_id == -1 && bank_id == -1) {  // all bank closes
             for (int b = 0; b < m_num_banks; b++) {
@@ -343,10 +343,10 @@ class DDR5_EK : public IDRAM, public Implementation {
                   // Remove the row from the open times map
                   row_curr_open_times[channel_id][rank_id][bg][b].erase(row_id);
 
-                  std::cout << "Row " << row_id << " in bank " << b
-                            << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
-                            << " closed at cycle " << m_clk
-                            << " (open for " << duration << " cycles) (ab close)" << std::endl;
+                  // std::cout << "Row " << row_id << " in bank " << b
+                  //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                  //           << " closed at cycle " << m_clk
+                  //           << " (open for " << duration << " cycles) (ab close)" << std::endl;
                 }
               }
             }
@@ -363,10 +363,10 @@ class DDR5_EK : public IDRAM, public Implementation {
                 // Remove the row from the open times map
                 row_curr_open_times[channel_id][rank_id][bg][bank_id].erase(row_id);
 
-                std::cout << "Row " << row_id << " in bank " << bank_id
-                          << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
-                          << " closed at cycle " << m_clk
-                          << " (open for " << duration << " cycles) (sb close)" << std::endl;
+                // std::cout << "Row " << row_id << " in bank " << bank_id
+                //           << ", bg "<< bg << ", rank " << rank_id << ", channel " << channel_id
+                //           << " closed at cycle " << m_clk
+                //           << " (open for " << duration << " cycles) (sb close)" << std::endl;
               } 
             }
           } 
@@ -383,10 +383,10 @@ class DDR5_EK : public IDRAM, public Implementation {
               row_curr_open_times[channel_id][rank_id][bg_id][bank_id].erase(row_id);
               // row_curr_open_times[channel_id][rank_id][bg_id][bank_id][row_id] = 0;
 
-              std::cout << "Row " << row_id << " in bank " << bank_id
-                        << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
-                        << " closed at cycle " << m_clk
-                        << " (open for " << duration << " cycles) (single row close)" << std::endl;
+              // std::cout << "Row " << row_id << " in bank " << bank_id
+              //           << ", bg "<< bg_id << ", rank " << rank_id << ", channel " << channel_id
+              //           << " closed at cycle " << m_clk
+              //           << " (open for " << duration << " cycles) (single row close)" << std::endl;
             }
           }
         }
@@ -1169,7 +1169,7 @@ class DDR5_EK : public IDRAM, public Implementation {
         s_percentage_rows_opened = (static_cast<float>(s_total_rows_opened) / s_total_rows_available) * 100.0f;
       }
       
-      // Call the updated export_histograms_to_csv function with specific IDs
+      // Call the export_histograms_to_csv function with specific IDs
       std::vector<int> channels = {0}; // Channel 0
       std::vector<int> ranks = {0};    // Rank 0
       std::vector<int> bankgroups = {0}; // Bankgroup 0

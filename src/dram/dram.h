@@ -150,6 +150,10 @@ class IDRAM : public Clocked<IDRAM> {
         return -1;
       }
     }
+
+    int get_density() const {
+        return m_organization.density;
+    }
 };
 
 #define RAMULATOR_DECLARE_SPECS() \

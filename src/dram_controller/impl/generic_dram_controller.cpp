@@ -53,9 +53,17 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
     float s_avg_read_latency = 0;
 
     //added by elior
-    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_cycle;
-    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_duration;
-    std::map<int, std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>>> row_open_count;
+    // Row metrics: [rank][bg][bank][row]
+    std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>> row_open_cycle;
+    std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>> row_open_duration;
+    std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>> row_open_count;
+    std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>> row_last_open_cycle;
+    std::map<int, std::map<int, std::map<int, std::map<int, size_t>>>> row_total_time_between_opens;
+
+    // Refresh metrics
+    std::map<int, size_t> total_refresh_ar_commands; // [rank]
+    std::map<int, double> full_refresh_cycles;       // [rank]
+    double density; // You need to implement get_density() in the DRAM class
 
 
   public:
@@ -85,6 +93,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
       s_read_row_hits_per_core.resize(m_num_cores, 0);
       s_read_row_misses_per_core.resize(m_num_cores, 0);
       s_read_row_conflicts_per_core.resize(m_num_cores, 0);
+
+      density = m_dram->get_density();
 
       register_stat(s_row_hits).name("row_hits_{}", m_channel_id);
       register_stat(s_row_misses).name("row_misses_{}", m_channel_id);
@@ -219,18 +229,59 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
         int row = req_it->addr_vec[4];
 
         if (m_dram->m_command_meta(req_it->command).is_opening) {
-            // Row is being opened
-            row_open_cycle[channel][rank][bg][bank][row] = m_clk;
-            row_open_count[channel][rank][bg][bank][row]++;
-        } else if (m_dram->m_command_meta(req_it->command).is_closing) {
-            // Row is being closed
-            if (row_open_cycle[channel][rank][bg][bank].count(row)) {
-                size_t open_cycle = row_open_cycle[channel][rank][bg][bank][row];
-                size_t duration = m_clk - open_cycle;
-                row_open_duration[channel][rank][bg][bank][row] += duration;
-                row_open_cycle[channel][rank][bg][bank].erase(row);
+          // Row is being opened
+          row_open_cycle[rank][bg][bank][row] = m_clk;
+          row_open_count[rank][bg][bank][row]++;
+
+          // Calculate time between reopens
+          if (row_last_open_cycle[rank][bg][bank].count(row)) {
+            size_t interval = m_clk - row_last_open_cycle[rank][bg][bank][row];
+            row_total_time_between_opens[rank][bg][bank][row] += interval;
+          }
+          row_last_open_cycle[rank][bg][bank][row] = m_clk;
+        } else if (m_dram->m_command_meta(req_it->command).is_closing 
+                  || m_dram->m_command_meta(req_it->command).is_refreshing) {
+          // PREA: all banks in rank
+          if (bg == -1 && bank == -1) {
+            for (auto& bg_pair : row_open_cycle[rank]) {
+              for (auto& bank_pair : bg_pair.second) {
+                for (auto it = bank_pair.second.begin(); it != bank_pair.second.end(); ) {
+                  int open_row = it->first;
+                  size_t open_cycle = it->second;
+                  size_t duration = m_clk - open_cycle;
+                  row_open_duration[rank][bg_pair.first][bank_pair.first][open_row] += duration;
+                  it = bank_pair.second.erase(it);
+                }
+              }
             }
+          }
+          // PREsb: all banks in bankgroup
+          else if (bg == -1) {
+            for (auto& bg_pair : row_open_cycle[rank]) {
+              for (auto it = bg_pair.second[bank].begin(); it != bg_pair.second[bank].end(); ) {
+                int open_row = it->first;
+                size_t open_cycle = it->second;
+                size_t duration = m_clk - open_cycle;
+                row_open_duration[rank][bg_pair.first][bank][open_row] += duration;
+                it = bg_pair.second[bank].erase(it);
+              }
+            }
+          }
+          // Single bank close
+          else {
+            if (row_open_cycle[rank][bg][bank].count(row)) {
+              size_t open_cycle = row_open_cycle[rank][bg][bank][row];
+              size_t duration = m_clk - open_cycle;
+              row_open_duration[rank][bg][bank][row] += duration;
+              row_open_cycle[rank][bg][bank].erase(row);
+            }
+          }
         }
+        
+        if (m_dram->m_command_meta(req_it->command).is_refreshing) {
+            total_refresh_ar_commands[rank]++;
+        }
+
         /////////////////////
 
         // If we are issuing the last command, set depart clock cycle and move the request to the pending queue
@@ -246,7 +297,7 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           if (m_dram->m_command_meta(req_it->command).is_opening) {
             if (m_active_buffer.enqueue(*req_it)) {
               buffer->remove(req_it);
-              print_active_buffer(m_active_buffer); // added by Elior
+              // print_active_buffer(m_active_buffer); // added by Elior
             }
           }
         }
@@ -291,8 +342,10 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
         int bank = req->addr_vec[3];
         int row = req->addr_vec[4];
 
+        bool debug_print = false;
         bool is_target = req->addr_vec.size() > 4 &&
                          channel == 0 && rank == 0 && bg == 0 && bank == 0;
+        is_target = is_target && debug_print; // if printing is disabled then it doesnt matter
 
         if (req->type_id == Request::Type::Read)
         {
@@ -313,15 +366,15 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
 
                 // Row conflict: close the previously open row
                 // Find the currently open row for this bank
-                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
-                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
-                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                if (!row_open_cycle[rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[rank][bg][bank].begin();
+                         it != row_open_cycle[rank][bg][bank].end(); ) {
                         int open_row = it->first;
                         size_t open_cycle = it->second;
                         size_t duration = m_clk - open_cycle;
-                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
-                        row_open_count[channel][rank][bg][bank][open_row]++;
-                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                        row_open_duration[rank][bg][bank][open_row] += duration;
+                        row_open_count[rank][bg][bank][open_row]++;
+                        it = row_open_cycle[rank][bg][bank].erase(it);
                     }
                 }
             } else {
@@ -333,15 +386,15 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
                     s_read_row_misses_per_core[req->source_id]++;
 
                 // Row miss: close the previously open row (if any)
-                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
-                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
-                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                if (!row_open_cycle[rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[rank][bg][bank].begin();
+                         it != row_open_cycle[rank][bg][bank].end(); ) {
                         int open_row = it->first;
                         size_t open_cycle = it->second;
                         size_t duration = m_clk - open_cycle;
-                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
-                        row_open_count[channel][rank][bg][bank][open_row]++;
-                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                        row_open_duration[rank][bg][bank][open_row] += duration;
+                        row_open_count[rank][bg][bank][open_row]++;
+                        it = row_open_cycle[rank][bg][bank].erase(it);
                     }
                 }
             }
@@ -360,15 +413,15 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
                 s_row_conflicts++;
 
                 // Row conflict: close the previously open row
-                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
-                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
-                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                if (!row_open_cycle[rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[rank][bg][bank].begin();
+                         it != row_open_cycle[rank][bg][bank].end(); ) {
                         int open_row = it->first;
                         size_t open_cycle = it->second;
                         size_t duration = m_clk - open_cycle;
-                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
-                        row_open_count[channel][rank][bg][bank][open_row]++;
-                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                        row_open_duration[rank][bg][bank][open_row] += duration;
+                        row_open_count[rank][bg][bank][open_row]++;
+                        it = row_open_cycle[rank][bg][bank].erase(it);
                     }
                 }
             } else {
@@ -378,15 +431,15 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
                 s_row_misses++;
 
                 // Row miss: close the previously open row (if any)
-                if (!row_open_cycle[channel][rank][bg][bank].empty()) {
-                    for (auto it = row_open_cycle[channel][rank][bg][bank].begin();
-                         it != row_open_cycle[channel][rank][bg][bank].end(); ) {
+                if (!row_open_cycle[rank][bg][bank].empty()) {
+                    for (auto it = row_open_cycle[rank][bg][bank].begin();
+                         it != row_open_cycle[rank][bg][bank].end(); ) {
                         int open_row = it->first;
                         size_t open_cycle = it->second;
                         size_t duration = m_clk - open_cycle;
-                        row_open_duration[channel][rank][bg][bank][open_row] += duration;
-                        row_open_count[channel][rank][bg][bank][open_row]++;
-                        it = row_open_cycle[channel][rank][bg][bank].erase(it);
+                        row_open_duration[rank][bg][bank][open_row] += duration;
+                        row_open_count[rank][bg][bank][open_row]++;
+                        it = row_open_cycle[rank][bg][bank].erase(it);
                     }
                 }
             }
@@ -511,12 +564,16 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
       s_write_queue_len_avg = (float) s_write_queue_len / (float) m_clk;
       s_priority_queue_len_avg = (float) s_priority_queue_len / (float) m_clk;
 
-      if (m_channel_id == 0) export_histograms_to_csv(); // added by Elior for DEBUG
-      
+      // Call the export_histograms_to_csv function with specific IDs
+      int selected_ch = 0;
+      std::vector<int> ranks = {0};    // Rank 0
+      std::vector<int> bankgroups = {0}; // Bankgroup 0
+      if (m_channel_id == selected_ch) export_histograms_to_csv(ranks, bankgroups);
+
       return;
     }
 
-    // added by Elior
+    // added by Elior - optional debug function to print the current state of the request buffer
     void print_active_buffer(const ReqBuffer& in_buffer) {
         std::cout << "[Active Buffer] Size: " << in_buffer.size() << std::endl;
         for (auto it = in_buffer.buffer.begin(); it != in_buffer.buffer.end(); ++it) {
@@ -546,31 +603,40 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
         }
     }
 
-    void export_histograms_to_csv() {
-        std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
-        ensure_directory_exists(output_dir);
-        std::string output_file = output_dir + "/row_histograms_generic_controller.csv";
-        std::ofstream csv_file(output_file);
+    void export_histograms_to_csv(const std::vector<int>& rank_ids, const std::vector<int>& bankgroup_ids) {
+      std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
+      ensure_directory_exists(output_dir);
+      std::string output_file = output_dir + "/row_metrics_generic_controller.csv";
+      std::ofstream csv_file(output_file);
 
-        csv_file << "Channel,Rank,BankGroup,Bank,Row,AvgOpenDuration,OpenCount\n";
-        for (const auto& [channel, ranks] : row_open_duration) {
-            for (const auto& [rank, bgs] : ranks) {
-                if (rank != 0) continue; // Only rank 0
-                for (const auto& [bg, banks] : bgs) {
-                    if (bg != 0) continue; // Only bank group 0
-                    for (const auto& [bank, rows] : banks) {
-                        for (const auto& [row, total_duration] : rows) {
-                            size_t count = row_open_count[channel][rank][bg][bank][row];
-                            double avg = count ? double(total_duration) / count : 0.0;
-                            csv_file << channel << "," << rank << "," << bg << "," << bank << "," << row << ","
-                                     << avg << "," << count << "\n";
-                        }
-                    }
-                }
+      csv_file << "Channel,Rank,BankGroup,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshARCommands,FullRefreshCycles,AvgRefreshesBetweenReopens\n";
+
+      int channel = m_channel_id;
+      for (int rank : rank_ids) {
+        if (row_open_duration.find(rank) == row_open_duration.end()) continue;
+        for (int bg : bankgroup_ids) {
+          if (row_open_duration[rank].find(bg) == row_open_duration[rank].end()) continue;
+          for (const auto& [bank, rows] : row_open_duration[rank][bg]) {
+            for (const auto& [row, total_duration] : rows) {
+              size_t open_count = row_open_count[rank][bg][bank][row];
+              double avg_open_duration = open_count ? double(total_duration) / open_count : 0.0;
+              size_t total_time_between = row_total_time_between_opens[rank][bg][bank][row];
+              double avg_reopen_interval = open_count ? double(total_time_between) / open_count : 0.0;
+              // int refresh_count = m_dram->m_power_stats[channel * m_dram->m_organization.count[m_dram->m_levels("rank")] + rank]
+              //   .cmd_counters[m_dram->m_cmds_counted("REF")];
+              size_t refresh_count = total_refresh_ar_commands[rank];
+              double full_refresh_cycles = static_cast<double>(refresh_count) / density;
+              double avg_refreshes_between_reopens = open_count ? full_refresh_cycles / open_count : 0.0;
+
+              csv_file << channel << "," << rank << "," << bg << "," << bank << "," << row << ", "
+                      << avg_open_duration << "," << open_count << "," << avg_reopen_interval << ", "
+                      << refresh_count << "," << full_refresh_cycles << "," << avg_refreshes_between_reopens << "\n";
             }
+          }
         }
-        csv_file.close();
-        std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
+      }
+      csv_file.close();
+      std::cout << "Row metrics exported to CSV file: " << output_file << std::endl;
     }
     ////////////////////////////
 
