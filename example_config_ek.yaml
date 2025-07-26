@@ -7,9 +7,9 @@ Frontend:
   inst_window_depth: 200
   clock_ratio: 1
   # num_expected_insts: 24000000000 #approx number of instructions to get to ~1s of simulation time
-  num_expected_insts: 12000000000 #approx number of instructions to get to ~0.5s of simulation time
+  # num_expected_insts: 12000000000 #approx number of instructions to get to ~0.5s of simulation time
   # num_expected_insts: 100000000 #100mil ~4ms
-  # num_expected_insts: 10000000
+  num_expected_insts: 10000000
   # num_expected_insts: 100000
   # num_expected_insts: 5000
   traces: 
@@ -68,13 +68,13 @@ MemorySystem:
     RefreshManager:
       impl: AllBank
     RowPolicy:
-      impl: ClosedRowPolicy
-#      impl: OpenRowPolicy
+      # impl: ClosedRowPolicy
+     impl: OpenRowPolicy
 # cap means after how many accesses to the row the row will be closed
-      cap: 8
+      # cap: 8
       # cap: 1
 #      cap: 16 #almost as good as open policy
-#      cap: 4
+     cap: 4 # default
     plugins:
 
   AddrMapper: #how the addr mapping is done to the rows,banks, etc

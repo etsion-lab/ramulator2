@@ -7,6 +7,8 @@ use experimental 'smartmatch';
 use File::Copy; # Include for moving files
 use Data::Dumper;
 
+our $same_asid = 1; # <-- Declare here, before any subroutines
+
 my $BENCHDIR="/scratch/elior.k/cloudsuite-traces";
 my $BINARY="/scratch/elior.k/ramulator2/build/ramulator2";
 
@@ -52,18 +54,22 @@ sub find_bench($) {
 }
 
 sub bench_to_trace($$$$) {
-    (my $name, my $cores, my $d, my $asid) = @_;
+    (my $name, my $cores, my $d, my $asid_mode) = @_;
 
     my $start_core = 0;
     $start_core = $cores if($d->{"half"});
 
     my @ret;
-    for ($start_core .. ($start_core + $cores - 1)) {
-        my $c = $_;
-
-        my $trace_path = "$BENCHDIR/$name-$cores/trace.cpu$c";
+    for my $i ($start_core .. ($start_core + $cores - 1)) {
+        my $trace_path = "$BENCHDIR/$name-$cores/trace.cpu$i";
+        my $asid_str;
+        if ($same_asid) {
+            $asid_str = ":0";
+        } else {
+            $asid_str = ":$i";
+        }
         if (-e $trace_path) {
-            push(@ret, "  - $trace_path:$asid");
+            push(@ret, "  - $trace_path$asid_str");
         } else {
             print "Warning: Trace file not found: $trace_path\n";
         }
@@ -76,12 +82,9 @@ sub build_trace_list {
     my @benchs = @_;
     my @ret;
 
-    my $asid = 0;
     for my $b (@benchs) {
         (my $bname, my $c, my $d) = find_bench($b);
-
-        push(@ret, bench_to_trace($bname, $c, $d, $asid));
-        $asid++;
+        push(@ret, bench_to_trace($bname, $c, $d, $same_asid));
     }
 
     print "Generated trace list:\n";
@@ -148,12 +151,15 @@ my $confile;
 my $rundir_prefix;
 my $help;
 
-GetOptions ("bench=s" => \@benchs,
-            "name=s" => \$test_name,
-            "dir=s" => \$rundir_prefix,
-            "config=s" => \$confile,
-            "help" => \$help)
-    or die("Error in command line arguments\n");
+# Add option for address space mode
+GetOptions (
+    "bench=s" => \@benchs,
+    "name=s" => \$test_name,
+    "dir=s" => \$rundir_prefix,
+    "config=s" => \$confile,
+    "help" => \$help,
+    "same-asid!" => \$same_asid, # --same-asid to force same, --no-same-asid for split
+) or die("Error in command line arguments\n");
 
 if($help) {
     usage($0);
