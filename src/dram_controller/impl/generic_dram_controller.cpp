@@ -65,6 +65,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
     std::map<int, double> full_refresh_cycles;       // [rank]
     double density; // You need to implement get_density() in the DRAM class
 
+    std::vector<std::tuple<int, int, int, int, size_t>> rows_not_opened_within_refresh; // (rank, bg, bank, row, interval)
+
 
   public:
     void init() override {
@@ -570,8 +572,40 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
       std::vector<int> bankgroups = {0}; // Bankgroup 0
       if (m_channel_id == selected_ch) export_histograms_to_csv(ranks, bankgroups);
 
-      return;
+      ////////////////////////////////////////////////////
+      // check that the interval is below the refresh time
+      size_t refresh_cycle = m_dram->m_timing_vals("nREFI");
+
+      for (const auto& rank_pair : row_total_time_between_opens) {
+          int rank = rank_pair.first;
+          for (const auto& bg_pair : rank_pair.second) {
+              int bg = bg_pair.first;
+              for (const auto& bank_pair : bg_pair.second) {
+                  int bank = bank_pair.first;
+                  for (const auto& row_pair : bank_pair.second) {
+                      int row = row_pair.first;
+                      size_t total_interval = row_pair.second;
+                      size_t open_count = row_open_count[rank][bg][bank][row];
+                      if (open_count > 0) {
+                          size_t avg_interval = total_interval / open_count;
+                          if (avg_interval > refresh_cycle) {
+                              rows_not_opened_within_refresh.push_back(std::make_tuple(rank, bg, bank, row, avg_interval));
+                          }
+                      }
+                  }
+              }
+          }
+      }
+
+      // Optionally, print or export these rows for debugging
+      std::ofstream debug_file("/scratch/elior.k/ramulator2/res/csv_outputs/rows_not_opened_within_refresh.csv");
+      debug_file << "Rank,BG,Bank,Row,AvgReopenInterval\n";
+      for (const auto& tup : rows_not_opened_within_refresh) {
+          debug_file << std::get<0>(tup) << "," << std::get<1>(tup) << "," << std::get<2>(tup) << "," << std::get<3>(tup) << "," << std::get<4>(tup) << "\n";
+      }
+      debug_file.close();
     }
+    /////////////////////////////////////////////////////
 
     // added by Elior - optional debug function to print the current state of the request buffer
     void print_active_buffer(const ReqBuffer& in_buffer) {
