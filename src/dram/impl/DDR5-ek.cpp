@@ -482,27 +482,6 @@ class DDR5_EK : public IDRAM, public Implementation {
       return m_channels[channel_id]->check_node_open(command, addr_vec, m_clk);
     };
 
-    void print_average_time_between_opens() {
-      for (const auto& [channel, ranks] : row_total_time_between_opens) {
-          for (const auto& [rank, bankgroups] : ranks) { 
-              for (const auto& [bankgroup, banks] : bankgroups) {
-                  for (const auto& [bank, rows] : banks) {
-                      for (const auto& [row, total_time] : rows) {
-                          int reopen_count = row_open_count[channel][rank][bankgroup][bank][row] - 1;
-                          if (reopen_count > 0) {
-                              double average_time = static_cast<double>(total_time) / reopen_count;
-                              std::cout << "Row " << row << " in bank " << bank
-                                        << ", bank group " << bankgroup
-                                        << ", rank " << rank << ", channel " << channel
-                                        << " average time between openings: " << average_time << " cycles" << std::endl;
-                          }
-                      }
-                  }
-              }
-          }
-      }
-    }
-
     void ensure_directory_exists(const std::string& dir) {
       struct stat info;
       if (stat(dir.c_str(), &info) != 0) {
@@ -512,100 +491,6 @@ class DDR5_EK : public IDRAM, public Implementation {
           // Path exists but is not a directory
           std::cerr << "Error: Path " << dir << " exists but is not a directory." << std::endl;
       }
-    }
-
-    void export_histograms_to_csv(int max_channels = -1) {
-        // // Generate a timestamp
-        // std::time_t now = std::time(nullptr);
-        // char timestamp[20];
-        // std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", std::localtime(&now));
-
-        // File path for the CSV file
-        std::string output_dir = "/scratch/elior.k/ramulator2/res/csv_outputs";
-        ensure_directory_exists(output_dir);
-        // std::string output_file = output_dir + "/row_histograms_" + timestamp + ".csv";
-        std::string output_file = output_dir + "/row_histograms.csv";
-
-        // Open the CSV file for writing
-        std::ofstream csv_file(output_file);
-
-        if (!csv_file.is_open()) {
-            std::cerr << "Error: Could not open file " << output_file << " for writing." << std::endl;
-            return;
-        }
-
-        // Write the header
-        csv_file << "Channel,Rank,BankGroup,Bank,Row,AvgOpenDuration,OpenCount,AvgReopenInterval,TotalRefreshARCommands,FullRefreshCycles,AvgRefreshesBetweenReopens\n";
-
-        // Debug: Check if row_durations is empty
-        if (row_durations.empty()) {
-          std::cerr << "Debug: row_durations is empty. No data to write to CSV." << std::endl;
-          return;
-        }
-
-        // Iterate through the data and populate the CSV file
-        int channel_count = 0;
-        int num_ranks = m_organization.count[m_levels["rank"]]; // Define num_ranks
-        int density = m_organization.density; // Get the density of the DDR5 device
-        for (const auto& [channel, ranks] : row_durations) {
-            std::cout << "Debug: Processing channel " << channel << std::endl;
-
-            // Stop if we've reached the maximum number of channels to process
-            if (max_channels != -1 && channel_count >= max_channels) {
-                break;
-            }
-
-            for (const auto& [rank, bankgroups] : ranks) {
-                std::cout << "Debug: Processing rank " << rank << " in channel " << channel << std::endl;
-                int total_refresh_ar_commands = m_power_stats[channel * num_ranks + rank].cmd_counters[m_cmds_counted("REF")];
-                double full_refresh_cycles = static_cast<double>(total_refresh_ar_commands) / density;
-
-                for (const auto& [bankgroup, banks] : bankgroups) { // Add bank group level
-                    std::cout << "Debug: Processing bankgroup " << bankgroup << " in rank " << rank << ", channel " << channel << std::endl;
-                    for (const auto& [bank, rows] : banks) {
-                        std::cout << "Debug: Processing bank " << bank << " in bankgroup " << bankgroup << ", rank " << rank << ", channel " << channel << std::endl;
-                        for (const auto& [row, total_duration] : rows) {
-                            std::cout << "Debug: Processing row " << row << " in bank " << bank << ", bankgroup " << bankgroup << ", rank " << rank << ", channel " << channel << std::endl;
-                            // Row open count
-                            int open_count = row_open_count[channel][rank][bankgroup][bank][row];
-                            if (open_count == 0) {
-                              std::cout << "Debug: Skipping row " << row << " because open_count is 0." << std::endl;
-                              continue;
-                            }
-
-                            // Average row open duration
-                            double avg_open_duration = (open_count > 0) 
-                                ? static_cast<double>(total_duration) / open_count 
-                                : 0.0;
-
-                            // Total time between reopens
-                            int total_time_between_opens = row_total_time_between_opens[channel][rank][bankgroup][bank][row];
-
-                            // Average time between reopens
-                            double avg_reopen_interval = (open_count > 0) 
-                                ? static_cast<double>(total_time_between_opens) / open_count 
-                                : 0.0;
-
-                            // Average refreshes between reopens
-                            double avg_refreshes_between_reopens = (open_count > 0)
-                                ? static_cast<double>(full_refresh_cycles) / open_count
-                                : 0.0;
-
-                            // Write the data to the CSV file
-                            csv_file << channel << "," << rank << "," << bankgroup << "," << bank << "," << row << ","
-                                     << avg_open_duration << "," << open_count << "," << avg_reopen_interval << ","
-                                     << total_refresh_ar_commands << "," << full_refresh_cycles << "," << avg_refreshes_between_reopens << "\n";
-                        }
-                    }
-                }
-            }
-            // Increment the channel count
-            channel_count++;
-        }
-
-        // Close the CSV file
-        csv_file.close();
-        std::cout << "Histograms exported to CSV file: " << output_file << std::endl;
     }
 
     void export_histograms_to_csv(const std::vector<int>& channel_ids, 
@@ -1169,11 +1054,11 @@ class DDR5_EK : public IDRAM, public Implementation {
         s_percentage_rows_opened = (static_cast<float>(s_total_rows_opened) / s_total_rows_available) * 100.0f;
       }
       
-      // Call the export_histograms_to_csv function with specific IDs
-      std::vector<int> channels = {0}; // Channel 0
-      std::vector<int> ranks = {0};    // Rank 0
-      std::vector<int> bankgroups = {0}; // Bankgroup 0
-      export_histograms_to_csv(channels, ranks, bankgroups);
+      // // Call the export_histograms_to_csv function with specific IDs
+      // std::vector<int> channels = {0}; // Channel 0
+      // std::vector<int> ranks = {0};    // Rank 0
+      // std::vector<int> bankgroups = {0}; // Bankgroup 0
+      // export_histograms_to_csv(channels, ranks, bankgroups);
     }
 
     void process_rank_energy(PowerStats& rank_stats, Node* rank_node) {
