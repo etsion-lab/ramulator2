@@ -43,9 +43,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       int llc_capacity_per_core = parse_capacity_str(param<std::string>("llc_capacity_per_core").desc("LLC capacity per core.").default_val("2MB"));
       int llc_num_mshr_per_core = param<int>("llc_num_mshr_per_core").desc("Number of LLC MSHR entries per core.").default_val(16);
 
-      bool cows_enable = param<bool>("cows_enable").desc("Enable CoWs.").required();
       bool cows_accel_zero_page = param<bool>("cows_accel_zero_page").desc("Accelerate zero page copy").required();
-      assert(!cows_accel_zero_page || cows_enable); // cows_accel_zero_page==true requires cows_enable==true
+
+      bool cows_enable = param<bool>("cows_enable").desc("Enable CoWs.").required();
       uint32_t dram_latency_on_translation = param<int>("cows_dram_latency_on_translation").desc("DRAM latency for COWs mapping translations.").required();
       uint32_t cows_cache_access_latency = param<int>("cows_cache_access_latency").desc("No. of cycles to access the CoWs cache.").required();
       uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
