@@ -6,7 +6,7 @@ use experimental 'smartmatch';
 
 use Data::Dumper;
 
-my $BENCHDIR="/scratch/yetsion/cows/cloudsuite-traces";
+my $BENCHDIR="/scratch/yetsion/cows/cloudsuite-traces/zero-copy-insts/";
 my $BINARY="/scratch/yetsion/cows/tools/ramulator2/build/ramulator2";
 
 my $RESDIR="/scratch/yetsion/cows/tools/ramulator2/res";
