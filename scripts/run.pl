@@ -159,5 +159,5 @@ my $cmd="/usr/bin/time -v $BINARY -f $outconf > out 2>&1";
 print "Changing dir to: $rundir\n";
 chdir $rundir;
 
-print "Running command: $cmd\n";
+print "Running command: $cmd in dir $rundir\n";
 system($cmd);
