@@ -27,6 +27,7 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     };
 
     std::vector<Inst> m_trace;
+    size_t m_trace_nline = 0;
     size_t m_trace_length = 0;
     size_t m_curr_trace_idx = 0;
 

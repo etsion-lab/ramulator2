@@ -52,7 +52,16 @@ bool SimpleO3Core::Trace::read_next_inst()
 {
   std::string line;
 
-  std::getline(*m_trace_file, line);
+  while(true) {
+      std::getline(*m_trace_file, line);
+      m_trace_nline++;
+
+//      fprintf(stderr, "line[%lu]='%s' (size=%lu)\n", m_trace_nline, line.c_str(), line.size());
+
+      // skip blank lines (check for specific case to reduce parsing overhead)
+      if(line.size()!=0 && !(line[0]=='\n' && line.size()==1))
+        break;
+  }
   std::vector<std::string> tokens;
 
   // get inst tpe and remove comments (try to avoid regexp since it seems to run slower)
@@ -72,7 +81,7 @@ bool SimpleO3Core::Trace::read_next_inst()
     int num_tokens = tokens.size();
 
     if (num_tokens != 2 & num_tokens != 3) {
-      throw ConfigurationError("Trace {} format invalid!", m_file_path_str);
+      throw ConfigurationError("Trace {} format invalid! (got {} tokens in line num. {})", m_file_path_str, num_tokens, m_trace_nline);
     }
     int bubble_count = std::stoi(tokens[0]);
 
