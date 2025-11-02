@@ -116,6 +116,12 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       register_stat(m_llc->s_llc_read_misses).name("llc_read_misses");
       register_stat(m_llc->s_llc_write_misses).name("llc_write_misses");
       register_stat(m_llc->s_llc_mshr_unavailable).name("llc_mshr_unavailable");
+#if 1
+      static auto tot_llc_accesses = ADDi(m_llc->s_llc_read_access, m_llc->s_llc_write_access);
+      static auto tot_llc_misses = ADDi(m_llc->s_llc_read_misses, m_llc->s_llc_write_misses);
+      register_stat(tot_llc_accesses, false).name("llc_total_access");
+      register_stat(tot_llc_misses, false).name("llc_total_misses");
+#endif
       if(m_cows_cache != nullptr) {
         register_stat(m_cows_cache->s_hits).name("cows_cache_hits");
         register_stat(m_cows_cache->s_misses).name("cows_cache_misses");
@@ -127,6 +133,8 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cows_cache->s_misses_on_llc_hit).name("cows_misses_on_llc_hit");
         register_stat(m_cows_cache->s_misses_on_llc_miss).name("cows_misses_on_llc_miss");
         register_stat(m_cows_cache->s_misses_on_llc_evict).name("cows_misses_on_llc_evict");
+        static auto cows2llc_miss_ratio = DIV(m_cows_cache->s_misses, tot_llc_misses);
+        register_stat(cows2llc_miss_ratio, false).name("cows2llc_miss_ratio");
       }
 
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
