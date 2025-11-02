@@ -154,9 +154,9 @@ class Implementation {
     _ParamGroupChainer param_group(std::string group_name) { return m_params._group(group_name); };
 
     template <typename T>
-    StatWrapper<T>& register_stat(T& val) { StatWrapper<T>* s = new StatWrapper<T>(val, *this, m_stats); return *s; };
+    StatWrapper<T>& register_stat(T& val, bool need_reset=true) { StatWrapper<T>* s = new StatWrapper<T>(val, *this, m_stats, need_reset); return *s; };
     template <typename T>
-    StatWrapper<T>& register_stat(std::vector<T>& val) { StatWrapper<T>* s = new StatWrapper<T>(val, *this, m_stats); return *s; };
+    StatWrapper<T>& register_stat(std::vector<T>& val, bool need_reset=true) { StatWrapper<T>* s = new StatWrapper<T>(val, *this, m_stats, need_reset); return *s; };
     bool has_stats() { return !m_stats.is_empty(); };
     /**
      * @brief    Recursively print the stats of myself and all my childs
