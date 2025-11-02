@@ -21,6 +21,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
     CoWsCache* m_cows_cache;
 
     size_t m_num_expected_insts = 0;
+    size_t m_warmup_percent = 0;
 
     std::string serialization_filename;
 
@@ -65,6 +66,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
 
       // Simulation parameters
       m_num_expected_insts = param<size_t>("num_expected_insts").desc("Number of instructions that the frontend should execute.").required();
+      m_warmup_percent = param<size_t>("warmup_percent").desc("Percent of the run that is considered warmup.").required();
 
       // Create address translation module
       m_translation = create_child_ifce<ITranslation>();
@@ -101,7 +103,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       // Create the cores
       SimpleO3Core::Trace::dram_page_bytes = dram_page_bytes;
       for (int id = 0; id < m_num_cores; id++) {
-        SimpleO3Core* core = new SimpleO3Core(id, ipc, depth, m_num_expected_insts, trace_list[id], cows_accel_zero_page, m_translation, m_llc);
+        SimpleO3Core* core = new SimpleO3Core(id, ipc, depth, m_num_expected_insts, m_warmup_percent, trace_list[id], cows_accel_zero_page, m_translation, m_llc);
         core->m_callback = [this](Request& req){return this->receive(req);} ;
         m_cores.push_back(core);
       }
@@ -109,19 +111,19 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       m_logger = Logging::create_logger("SimpleO3");
 
       // Register the stats
-      register_stat(m_num_expected_insts).name("num_expected_insts");
+      register_stat(m_num_expected_insts, false).name("num_expected_insts");// do not reset this counter
       register_stat(m_llc->s_llc_eviction).name("llc_eviction");
       register_stat(m_llc->s_llc_read_access).name("llc_read_access");
       register_stat(m_llc->s_llc_write_access).name("llc_write_access");
       register_stat(m_llc->s_llc_read_misses).name("llc_read_misses");
       register_stat(m_llc->s_llc_write_misses).name("llc_write_misses");
       register_stat(m_llc->s_llc_mshr_unavailable).name("llc_mshr_unavailable");
-#if 1
+
       static auto tot_llc_accesses = ADDi(m_llc->s_llc_read_access, m_llc->s_llc_write_access);
       static auto tot_llc_misses = ADDi(m_llc->s_llc_read_misses, m_llc->s_llc_write_misses);
-      register_stat(tot_llc_accesses, false).name("llc_total_access");
+      register_stat(tot_llc_accesses, false).name("llc_total_access"); // do not reset compount counters
       register_stat(tot_llc_misses, false).name("llc_total_misses");
-#endif
+
       if(m_cows_cache != nullptr) {
         register_stat(m_cows_cache->s_hits).name("cows_cache_hits");
         register_stat(m_cows_cache->s_misses).name("cows_cache_misses");
@@ -138,9 +140,15 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       }
 
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
-        // register_stat(m_cores[core_id]->s_insts_retired).name("cycles_retired_core_{}", core_id);
-        register_stat(m_cores[core_id]->s_cycles_recorded).name("cycles_recorded_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_insts_retired, false).name("cycles_retired_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_cycles_recorded, false).name("cycles_recorded_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_cycles_recorded_post_warmup).name("cycles_recorded_post_warmup_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_insts_retired_post_warmup).name("insts_retired_post_warmup_core_{}", core_id);
         register_stat(m_cores[core_id]->s_mem_access_cycles).name("memory_access_cycles_recorded_core_{}", core_id);
+        auto frac_cycles_post_warmup = new DIV(m_cores[core_id]->s_cycles_recorded_post_warmup, m_cores[core_id]->s_cycles_recorded);
+        auto frac_insts_post_warmup = new DIV(m_cores[core_id]->s_insts_retired_post_warmup, m_num_expected_insts);
+        register_stat(*frac_cycles_post_warmup, false).name("frac_cycles_post_warmup_{}", core_id);
+        register_stat(*frac_insts_post_warmup, false).name("frac_insts_post_warmup_{}", core_id);
       }
     }
 
@@ -182,7 +190,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       return true;
     }
 
-#if 0
+#if 1
     bool is_warmup_finished() override {
       for (auto core : m_cores) {
         if (!(core->finished_warmup)){

@@ -126,6 +126,11 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     Addr_t m_writeback_addr = -1;
 
     size_t m_num_expected_insts = 0;
+    size_t m_warmup_percent = 0;
+    size_t m_num_warmup_insts = 0;
+    size_t m_finished_warmup_at_inst = 0;
+
+    Clk_t m_finished_warmup_at_cycle = 0;
     Clk_t m_last_mem_cycle = 0; // The last cycle that a memory request departs from mc
 
   /************************************************
@@ -135,11 +140,13 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     bool reached_expected_num_insts = false;
     bool finished_warmup = false;
     size_t s_insts_retired = 0;
+    size_t s_insts_retired_post_warmup = 0;
     size_t s_cycles_recorded = 0;
+    size_t s_cycles_recorded_post_warmup = 0;
     Clk_t  s_mem_access_cycles = 0;
 
   public:
-    SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc);
+    SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, size_t warmup_percent, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc);
 
     /**
      * @brief   Ticks the core.

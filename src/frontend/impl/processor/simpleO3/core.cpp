@@ -171,8 +171,8 @@ void SimpleO3Core::InstWindow::set_ready(Addr_t addr) {
   }
 }
 
-SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc)
-  : m_id(id), m_window(ipc, depth), m_trace(trace_path, cows_accel_zero_page), m_num_expected_insts(num_expected_insts), m_translation(translation), m_llc(llc) {
+SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, size_t warmup_percent, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc)
+  : m_id(id), m_window(ipc, depth), m_trace(trace_path, cows_accel_zero_page), m_num_expected_insts(num_expected_insts), m_warmup_percent(warmup_percent), m_num_warmup_insts(warmup_percent * num_expected_insts / 100), m_translation(translation), m_llc(llc) {
   // Fetch the instructions and addresses for tick 0
   auto inst = m_trace.get_next_inst();
   m_num_bubbles = inst.bubble_count;
@@ -205,11 +205,18 @@ void SimpleO3Core::tick() {
     if (s_insts_retired >= m_num_expected_insts) {
       reached_expected_num_insts = true;
       s_cycles_recorded = m_clk;
+      s_cycles_recorded_post_warmup = m_clk - m_finished_warmup_at_cycle;
+      s_insts_retired_post_warmup = m_num_expected_insts - m_finished_warmup_at_inst;
     }
   }
 
   if (!finished_warmup) {
-    if (s_insts_retired >= (m_num_expected_insts/10)) {
+    if (s_insts_retired >= m_num_warmup_insts) {
+      printf("# Core %d finished warmup at cycle %lu after retiring %lu instructions (limit=%lu or %lu%%).\n",
+             m_id, (unsigned long)m_clk, (unsigned long)s_insts_retired, m_num_warmup_insts, m_warmup_percent);
+
+      m_finished_warmup_at_cycle = m_clk;
+      m_finished_warmup_at_inst = s_insts_retired;
       finished_warmup = true;
     }
   }
