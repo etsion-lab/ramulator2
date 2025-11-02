@@ -3,7 +3,6 @@
 use strict;
 use Getopt::Long;
 use experimental 'smartmatch';
-
 use Data::Dumper;
 
 my $BENCHDIR="/scratch/yetsion/cows/cloudsuite-traces/zero-copy-insts/";
@@ -126,14 +125,17 @@ my $confile;
 my $rundir_prefix;
 my $help;
 
+my $argc = scalar(@ARGV);
+
 GetOptions ("bench=s" => \@benchs,
             "name=s" => \$test_name,
             "dir=s" => \$rundir_prefix,
             "config=s" => \$confile,
-            "help" => \$help)
+            "help" => \$help,
+            "h" => \$help)
     or die("Error in command line arguments\n");
 
-if($help) {
+if($argc==0 or $help) {
     usage($0);
     exit(0);
 }
