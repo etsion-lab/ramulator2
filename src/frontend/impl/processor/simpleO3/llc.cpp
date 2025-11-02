@@ -83,7 +83,7 @@ bool SimpleO3LLC::send(Request req) {
     uint32_t cows_latency = 0;
     if(m_cows_cache != nullptr) {
       // The cows cache needs to be updated on a write hit (update block map)
-       cows_latency = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk);
+       cows_latency = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
     // Add to the hit list to callback when finished
@@ -160,7 +160,7 @@ bool SimpleO3LLC::send(Request req) {
     // Yoav: is the dram page translation available in the cows cache?
     uint32_t cows_latency = 0;
     if(m_cows_cache != nullptr) {
-      cows_latency = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk);
+      cows_latency = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
     // Add to the miss request list
@@ -245,7 +245,7 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
   if(m_cows_cache != nullptr) {
     // no additional latency if evict misses, since we already pay for the miss
     // (evict is only called in the context of a miss)
-    m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk);
+    m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk, total_misses());
   }
 
   set.erase(victim_it);

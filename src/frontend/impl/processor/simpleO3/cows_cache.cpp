@@ -14,6 +14,10 @@
 
 namespace Ramulator {
 
+// initialize variables to illegal values, so we can flush out bugs
+uint64_t CoWsCache::Line::bytes_per_line = 0;
+uint64_t CoWsCache::Line::dram_page_bytes = 0;
+
 std::string
 CoWsCache::Line::toString() const
 {
@@ -130,6 +134,10 @@ CoWsCache::CoWsCache(uint32_t nlines,
     assert(is_power_of_2(m_cache_line_bytes));
     assert(is_power_of_2(m_dram_page_bytes));
 
+    // set global cache line parameters
+    CoWsCache::Line::dram_page_bytes = dram_page_bytes;
+    CoWsCache::Line::bytes_per_line = cache_line_bytes;
+
     std::cerr<<"# COWs cache: bytes="<<(m_nsets*m_assoc*20)<<", nlines="<<m_nlines<<", sets="<<m_nsets<<", m_assoc="<<m_assoc<<std::endl;
 }
 
@@ -179,7 +187,7 @@ void CoWsCache::perfect_cache_erase(Addr_t baddr)
 }
 
 // this function is here as a placeholder for collecting statistics and calling the ReplPolicy hit method
-uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk)
+uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
     // on read hit we don't need to access the cows cache at all.
     if(!is_write) {
@@ -205,7 +213,7 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk)
     //
     // access cows cache
     //
-    // tell the replacement policy's we have a write hit
+    // tell the replacement policy's we have an llc write hit
     auto set_idx = get_set_idx(page_addr);
     auto set = m_cache_sets[set_idx];
     auto cows_cache_miss = m_policy->llc_hit(*this, set, page_addr, block_id, is_write);
@@ -219,7 +227,7 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk)
         ++s_misses_on_llc_hit;
         m_stats_set_miss[set_idx]++;
 
-        m_stats_cows_miss_clk.push_back(clk);
+        track_misses(clk, total_llc_misses);
 
         // miss latency is at least a cows cache access latency
         s_cows_cycles += get_dram_latency_on_translation(page_addr);
@@ -232,7 +240,7 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk)
     return hit_lat;
 }
 
-uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk)
+uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
@@ -271,7 +279,7 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk)
         ++s_misses_on_llc_miss;
         m_stats_set_miss[set_idx]++;
 
-        m_stats_cows_miss_clk.push_back(clk);
+        track_misses(clk, total_llc_misses);
 
         miss_latency += get_dram_latency_on_translation(page_addr);
     }
@@ -284,7 +292,7 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk)
     return miss_latency;
 }
 
-uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk)
+uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses)
 {
     Addr_t page_addr = get_page_addr(baddr);
     uint32_t block_id = get_block_id(baddr);
@@ -325,7 +333,7 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk)
             ++s_misses_on_llc_evict;
             m_stats_set_miss[set_idx]++;
 
-            m_stats_cows_miss_clk.push_back(clk);
+            track_misses(clk, total_llc_misses);
 
             evict_latency += get_dram_latency_on_translation(page_addr);
         }
@@ -379,7 +387,7 @@ void CoWsCache::fini()
         }
     }
 
-    // dump stat: cycles between misses
+    // dump stat: set popularity
     {
         auto of = std::ofstream(m_stats.stats_fname + ".set-popularity");
 

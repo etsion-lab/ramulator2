@@ -24,7 +24,9 @@ public:
     };
 
     class Line {
-        const uint32_t MAX_BLOCKS_PER_PAGE = 8192/64;
+        public:
+        static uint64_t bytes_per_line;
+        static uint64_t dram_page_bytes;
 
         private:
             bool valid;
@@ -40,7 +42,7 @@ public:
                      page_phys_addr(0),
                      ready_clk(-1),
                      real_page_phys_addr(0),
-                     block_map(MAX_BLOCKS_PER_PAGE, false) {}
+                     block_map(dram_page_bytes / bytes_per_line, false) {}
 
             void reset() {
                 valid = false;
@@ -229,9 +231,9 @@ public:
     void perfect_cache_erase(Addr_t page_addr);
 
     // these functions return the latency incurred by the cows cach access (fill + potential WB)
-    uint32_t llc_hit(Addr_t baddr, bool is_write, Clk_t clk);
-    uint32_t llc_miss(Addr_t baddr, bool is_write, Clk_t clk);
-    uint32_t llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk);
+    uint32_t llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
+    uint32_t llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
+    uint32_t llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses);
 
     uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & ~m_dram_page_mask) / m_cache_line_bytes); }
     uint32_t get_dram_page_bytes() { return m_dram_page_bytes; }
@@ -248,6 +250,29 @@ private:
         // we don't force the number of sets to be a power of 2, so we can scan different
         // cache sizes
         return (uint32_t)(page_id % m_nsets);
+    }
+
+    void track_misses(Clk_t clk, int total_llc_misses) {
+        static Clk_t last_print = 0;
+        static uint64_t last_miss_count = 0;
+        static uint64_t last_llc_miss_count = 0;
+
+        if(clk - last_print >= 10000) {
+            Clk_t delta_clk = clk - last_print;
+            uint64_t cows_delta_miss = s_misses - last_miss_count;
+            uint64_t llc_delta_miss = total_llc_misses - last_llc_miss_count;
+            double misses_per_cycle = (double)cows_delta_miss / (double)delta_clk;
+            double misses_per_llc_miss = (double)cows_delta_miss / (double)llc_delta_miss;
+
+            printf("# COWs stats at %lu: misses/cycle %12.6lf, misses/llc %12.6lf\n",
+                    (uint64_t)clk, misses_per_cycle, misses_per_llc_miss);
+
+            last_print = clk;
+            last_miss_count = s_misses;
+            last_llc_miss_count = (uint64_t)total_llc_misses;
+        }
+
+        m_stats_cows_miss_clk.push_back(clk);
     }
 };
 

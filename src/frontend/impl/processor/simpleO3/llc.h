@@ -85,6 +85,10 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     void deserialize(std::string serialization_filename);
     void dump_llc();
 
+    int total_misses() {
+      return s_llc_read_misses + s_llc_write_misses;
+    }
+
   private:
     int get_index(Addr_t addr)  { return (addr >> m_index_offset) & m_index_mask; };
     Addr_t get_tag(Addr_t addr) { return (addr >> m_tag_offset); };
