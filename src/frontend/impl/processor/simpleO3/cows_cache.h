@@ -25,8 +25,30 @@ public:
 
     class Line {
         public:
+        static const uint32_t PHYS_ADDRESS_SPACE_BITS = 52; // ARMv8.2 supports a 52b physical address space
         static uint64_t bytes_per_line;
         static uint64_t dram_page_bytes;
+        static inline uint32_t getNumBlocksPerPage() {
+            return (uint32_t)(dram_page_bytes / bytes_per_line);
+        }
+        static inline uint32_t getDataBitSize() {
+            return getNumBlocksPerPage();
+        }
+        static inline uint32_t getTagBitSize() {
+            return PHYS_ADDRESS_SPACE_BITS - std::countr_zero(dram_page_bytes);
+        }
+        static inline uint64_t getDramPageOffsetBits() { // number of bits for offset within a dram page
+            return std::countr_zero(dram_page_bytes);
+        }
+        static inline Addr_t getDramPageOffsetMask() { // mask to get offset inside a dram page address from memory address
+            return ((((Addr_t)1)<<getDramPageOffsetBits()) - 1);
+        }
+        static inline Addr_t getDramPageAddrMask() { // mask to get dram page address from memory address
+            return ~getDramPageOffsetMask();
+        }
+        static inline uint32_t getTagBits() {
+            return (PHYS_ADDRESS_SPACE_BITS - getDramPageOffsetBits()) + 2; // dirty + valid bits
+        }
 
         private:
             bool valid;
@@ -35,6 +57,7 @@ public:
             Clk_t ready_clk;
             Addr_t real_page_phys_addr;
             std::vector<bool> block_map;
+            uint32_t max_present_count;
 
         public:
             Line() : valid(false),
@@ -42,14 +65,20 @@ public:
                      page_phys_addr(0),
                      ready_clk(-1),
                      real_page_phys_addr(0),
-                     block_map(dram_page_bytes / bytes_per_line, false) {}
+                     block_map(getNumBlocksPerPage(), false),
+                     max_present_count(0) {}
 
             void reset() {
+                if(valid && max_present_count > 0) {
+                    printf("COWS cache evict. max_present_count=%u\n", max_present_count);
+                }
+
                 valid = false;
                 dirty = false;
                 setTag(0);
                 ready_clk = -1;
                 std::fill(block_map.begin(), block_map.end(), false);
+                max_present_count = 0;
             }
 
             Addr_t getTag() const {
@@ -96,6 +125,9 @@ public:
                 DBG("block=%u, block_map.size()=%d", block_id, (int)block_map.size());
 
                 assert(block_id < block_map.size());
+                if(block_map[block_id] != present) {
+                    if(present) max_present_count++;
+                }
                 block_map[block_id] = present;
             }
 
@@ -116,6 +148,15 @@ public:
     // The head of the list is the least-recently-used way (aka victim).
     class ReplPolicy {
         public:
+        CoWsCache* m_cows_cache = nullptr;
+
+        virtual ~ReplPolicy() {}
+
+        void setCowsCache(CoWsCache* cows_cache) {
+            assert(m_cows_cache == nullptr);
+            m_cows_cache = cows_cache;
+        }
+
         // all methods return true if there was a need to access the renaming table in DRAM
         virtual std::string name() const = 0;
         virtual bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const = 0;
@@ -142,6 +183,7 @@ public:
                 // set is full so get the a victim
                 it = victim(set);
                 it->reset();
+                m_cows_cache->s_evicts++;
             }
             // new entry in set. mark the tag.
             it->setTag(page_addr);
@@ -159,7 +201,8 @@ public:
 
     // The head of the list is the least-recently-used way.
     class LRU_nohit : public ReplPolicy  {
-        std::string name() const override { return "LRU_nohit"; }
+        public:
+        virtual std::string name() const override { return "LRU_nohit"; }
         bool llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
         bool llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id, bool is_write) const override;
         bool llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t baddr, uint32_t block_id) const override;
@@ -184,7 +227,7 @@ private:
     std::unordered_map<Addr_t, Line> m_perfect_cache;
 
     std::vector<CacheSet_t> m_cache_sets;
-    const ReplPolicy* m_policy;
+    ReplPolicy* m_policy;
 
     // track the number of valid lines in llc
     uint32_t m_lines_in_llc;
@@ -198,6 +241,7 @@ public:
     uint64_t s_hits = 0;
     uint64_t s_misses = 0;
     uint64_t s_access = 0;
+    uint64_t s_evicts = 0;
 
     uint64_t s_accesses_on_llc_hit = 0;
     uint64_t s_accesses_on_llc_miss = 0;
@@ -218,7 +262,7 @@ public:
               uint32_t dram_page_bytes,
               uint32_t access_latency,
               uint32_t dram_latency_on_translation,
-              const CoWsCache::ReplPolicy* policy,
+              CoWsCache::ReplPolicy* policy,
               const CoWsStats& stats);
 
     virtual ~CoWsCache() {}
@@ -235,7 +279,7 @@ public:
     uint32_t llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
     uint32_t llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses);
 
-    uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & ~m_dram_page_mask) / m_cache_line_bytes); }
+    uint32_t get_block_id(Addr_t baddr) { return (uint32_t)((baddr & Line::getDramPageOffsetMask()) / m_cache_line_bytes); }
     uint32_t get_dram_page_bytes() { return m_dram_page_bytes; }
 
     uint32_t get_dram_latency_on_translation(Addr_t addr) {

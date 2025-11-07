@@ -74,7 +74,9 @@ bool CoWsCache::LRU_nohit::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr
         it = alloc_line(cows_cache, set, page_addr);
     }
 
-    // block bit not set? set it and mark dirty
+    // we fetched the page rename data into the cache
+    // on a write miss we need to make sure the the block is now renamed and set it dirty
+    // on a read miss, no bits need updating.
     if(is_write && !it->getBlockID(block_id)) {
         it->setBlockID(block_id, true);
         it->setDirty(true);
@@ -108,7 +110,7 @@ CoWsCache::CoWsCache(uint32_t nlines,
                      uint32_t dram_page_bytes,
                      uint32_t access_latency,
                      uint32_t dram_latency_on_translation,
-                     const CoWsCache::ReplPolicy* policy,
+                     CoWsCache::ReplPolicy* policy,
                      const CoWsStats& stats)
               : m_nlines(nlines),
                 m_nsets(nlines/assoc),
@@ -118,8 +120,8 @@ CoWsCache::CoWsCache(uint32_t nlines,
                 m_access_latency(access_latency),
                 m_stats(stats),
                 m_dram_latency_on_translation(dram_latency_on_translation),
-                m_dram_page_bit_offset(std::countr_zero(dram_page_bytes)),
-                m_dram_page_mask(~( (((Addr_t)1)<<m_dram_page_bit_offset) - 1) ),
+                m_dram_page_bit_offset(Line::getDramPageOffsetBits()),
+                m_dram_page_mask(Line::getDramPageAddrMask()),
                 m_lines_in_llc(0),
                 m_stats_cows2llc_valid(),
                 m_stats_cows_miss_clk(),
@@ -138,7 +140,31 @@ CoWsCache::CoWsCache(uint32_t nlines,
     CoWsCache::Line::dram_page_bytes = dram_page_bytes;
     CoWsCache::Line::bytes_per_line = cache_line_bytes;
 
-    std::cerr<<"# COWs cache: bytes="<<(m_nsets*m_assoc*20)<<", nlines="<<m_nlines<<", sets="<<m_nsets<<", m_assoc="<<m_assoc<<std::endl;
+    m_policy->setCowsCache(this);
+
+    std::cerr<<"# COWs cache: dram: "
+             <<", dram page bytes="<<dram_page_bytes
+             <<", dram_page_offset_bits="<<Line::getDramPageOffsetBits()
+             <<", dram_page_offset_mask=0x"<<std::hex<<Line::getDramPageOffsetMask()<<std::dec
+             <<", dram_page_addr_mask=0x"<<std::hex<<Line::getDramPageAddrMask()<<std::dec
+             <<std::endl;
+
+    std::cerr<<"# COWs cache: dimensions: "
+             <<"cache line bytes="<<cache_line_bytes
+            <<", nlines="<<m_nlines
+            <<", sets="<<m_nsets
+            <<", m_assoc="<<m_assoc
+            <<", tag bits="<<Line::getTagBits()
+            <<", data bits="<<Line::getNumBlocksPerPage()
+             <<std::endl;
+
+    auto cows_cache_tag_bytes = (m_nsets * m_assoc * Line::getTagBits())/8;
+    auto cows_cache_data_bytes = (m_nsets * m_assoc * Line::getNumBlocksPerPage())/8; // 1 bit per block
+    std::cerr<<"# COWs cache: bytes="
+            <<"tag store="<<cows_cache_tag_bytes
+            <<", data store="<<cows_cache_data_bytes
+            <<", total="<<(cows_cache_tag_bytes + cows_cache_data_bytes)
+            <<std::endl;
 }
 
 bool CoWsCache::perfect_cache_lookup(Addr_t baddr, Line*& ret)
