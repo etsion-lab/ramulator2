@@ -5,6 +5,8 @@
 #include <string>
 #include <variant>
 #include <iostream>
+#include <numeric>
+#include <type_traits>
 
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
@@ -26,6 +28,17 @@ class BinOpBase {
     public:
     BinOpBase() {};
     virtual Tret run() const = 0;
+
+    Tret operator*() const { return this->run(); };
+    explicit operator uint32_t() const {
+        return static_cast<uint32_t>(this->run());
+    }
+    explicit operator uint64_t() const {
+        return static_cast<uint64_t>(this->run());
+    }
+    explicit operator double() const {
+        return static_cast<double>(this->run());
+    }
 };
 
 template <typename Tret, typename T1, typename T2>
@@ -33,6 +46,7 @@ class BinOp : public BinOpBase<Tret> {
   private:
     inline static T1 T1_NULL = T1();
     inline static T2 T2_NULL = T2();
+
   protected:
     T1& _op1;
     T2& _op2;
@@ -48,14 +62,11 @@ class BinOp : public BinOpBase<Tret> {
     };
 
     virtual Tret run() const = 0;
-    Tret operator*() const { return this->run(); };
-    explicit operator Tret() const {
-        return this->run();
-    }};
+};
 
-template <typename Tret, typename T1, typename T2>
+template <typename Tret>
 inline YAML::Emitter& operator<<(YAML::Emitter& emitter,
-                                   const BinOp<Tret, T1, T2>& binop) {
+                                   const BinOpBase<Tret>& binop) {
   Tret val = binop.run();
   emitter << val;
   return emitter;
@@ -77,8 +88,22 @@ class DIV : public BinOp<double, T1, T2> {
     DIV() : BinOp<double, T1, T2>() {}
     DIV(T1& op1, T2& op2) : BinOp<double, T1, T2>(op1, op2) {};
     double run() const {
+      auto op1 = static_cast<double>(this->_op1); // force execution of run() if op1 is compound
+      auto op2 = static_cast<double>(this->_op2); // force execution of run() if op2 is compound
+      return op1 / op2;
+    }
+};
 
-      return static_cast<double>(this->_op1) / static_cast<double>(static_cast<uint64_t>(this->_op2));
+template <typename T>
+class SUM : public BinOpBase<T>{
+  std::vector<T*> _vec;
+
+  public:
+    SUM() : BinOpBase<T>() {}
+    SUM(std::vector<T*>& vec): _vec(vec), BinOpBase<T>() {};
+    T run() const {
+      auto sum = [](T s, T* v){ return s + *v; };
+      return std::accumulate(_vec.begin(), _vec.end(), T(), sum);
     }
 };
 
