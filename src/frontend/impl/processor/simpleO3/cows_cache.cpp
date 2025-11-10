@@ -226,6 +226,7 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_ll
 
     // miss latency is at least a cows cache access latency
     uint32_t hit_lat = m_access_latency;
+    s_cows_cycles_self += m_access_latency;
 
     //
     // perfect cache sanity
@@ -256,12 +257,13 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_ll
         track_misses(clk, total_llc_misses);
 
         // miss latency is at least a cows cache access latency
-        s_cows_cycles += get_dram_latency_on_translation(page_addr);
         hit_lat += get_dram_latency_on_translation(page_addr);
     }
     else {
         ++s_hits;
     }
+
+    s_cows_cycles += hit_lat;
 
     return hit_lat;
 }
@@ -272,6 +274,7 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_l
     uint32_t block_id = get_block_id(baddr);
     // miss latency is at least a cows cache access latency
     uint32_t miss_latency = m_access_latency;
+    s_cows_cycles_self += m_access_latency;
 
     // update stats
     m_lines_in_llc++;
@@ -346,6 +349,7 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int tot
     // we only need to access the cows cache if we evict a dirty page (need real mapping)
     if(evict_dirty) {
         evict_latency += m_access_latency;
+        s_cows_cycles_self += m_access_latency;
 
         auto set_idx = get_set_idx(page_addr);
         auto set = m_cache_sets[set_idx];

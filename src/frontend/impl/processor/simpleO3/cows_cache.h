@@ -251,6 +251,7 @@ public:
     uint64_t s_misses_on_llc_evict = 0;
 
     uint64_t s_cows_cycles = 0;
+    uint64_t s_cows_cycles_self = 0;
 
     Clk_t s_avg_dram_lat_sum = 0;
     Clk_t s_avg_dram_lat_cnt = 0;
