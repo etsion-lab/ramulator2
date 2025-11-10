@@ -128,7 +128,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cows_cache->s_hits).name("cows_cache_hits");
         register_stat(m_cows_cache->s_misses).name("cows_cache_misses");
         register_stat(m_cows_cache->s_access).name("cows_cache_access");
-        register_stat(m_cows_cache->s_cows_cycles).name("cows_miss_cycles");
+        register_stat(m_cows_cache->s_cows_cycles).name("cows_access_cycles");
+        register_stat(m_cows_cache->s_cows_cycles_self).name("cows_access_cycles_self");
+        register_stat(m_cows_cache->s_access).name("cows_accesses");
         register_stat(m_cows_cache->s_accesses_on_llc_hit).name("cows_accesses_on_llc_hit");
         register_stat(m_cows_cache->s_accesses_on_llc_miss).name("cows_accesses_on_llc_miss");
         register_stat(m_cows_cache->s_accesses_on_llc_evict).name("cows_accesses_on_llc_evict");
@@ -144,6 +146,8 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(cows2llc_miss_ratio, false).name("cows2llc_miss_ratio");
       }
 
+      std::vector<size_t*> tot_insts_post_warmup;
+      std::vector<size_t*> tot_cycles_post_warmup;
       for (int core_id = 0; core_id < m_cores.size(); core_id++) {
         register_stat(m_cores[core_id]->s_insts_retired, false).name("cycles_retired_core_{}", core_id);
         register_stat(m_cores[core_id]->s_cycles_recorded, false).name("cycles_recorded_core_{}", core_id);
@@ -154,7 +158,19 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         auto frac_insts_post_warmup = new DIV(m_cores[core_id]->s_insts_retired_post_warmup, m_num_expected_insts);
         register_stat(*frac_cycles_post_warmup, false).name("frac_cycles_post_warmup_{}", core_id);
         register_stat(*frac_insts_post_warmup, false).name("frac_insts_post_warmup_{}", core_id);
+
+        auto core_ipc = new DIV(m_cores[core_id]->s_insts_retired_post_warmup, m_cores[core_id]->s_cycles_recorded_post_warmup);
+        register_stat(*core_ipc, false).name("ipc_core_{}", core_id);
+
+
+        tot_insts_post_warmup.push_back(&m_cores[core_id]->s_insts_retired_post_warmup);
+        tot_cycles_post_warmup.push_back(&m_cores[core_id]->s_cycles_recorded_post_warmup);
       }
+      auto tot_insts = new SUM(tot_insts_post_warmup);
+      auto tot_cycles = new SUM(tot_cycles_post_warmup);
+      auto tot_ipc = new DIV(*tot_insts, *tot_cycles);
+      register_stat(*tot_ipc, false).name("ipc_total");
+
     }
 
     void tick() override {
