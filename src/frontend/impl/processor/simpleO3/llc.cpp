@@ -81,9 +81,10 @@ bool SimpleO3LLC::send(Request req) {
 
     // Yoav: update cows cache on hit
     uint32_t cows_latency = 0;
+    bool cows_hit = false;
     if(m_cows_cache != nullptr) {
       // The cows cache needs to be updated on a write hit (update block map)
-       cows_latency = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
+       std::tie(cows_hit, cows_latency) = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
     // Add to the hit list to callback when finished
@@ -159,8 +160,9 @@ bool SimpleO3LLC::send(Request req) {
 
     // Yoav: is the dram page translation available in the cows cache?
     uint32_t cows_latency = 0;
+    bool cows_hit = false;
     if(m_cows_cache != nullptr) {
-      cows_latency = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
+      std::tie(cows_hit, cows_latency) = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
     // Add to the miss request list

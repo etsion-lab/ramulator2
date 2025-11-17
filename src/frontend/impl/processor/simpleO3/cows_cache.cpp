@@ -15,8 +15,43 @@
 namespace Ramulator {
 
 // initialize variables to illegal values, so we can flush out bugs
+uint64_t CoWsCache::AddrParser::s_dram_page_bytes;
+uint64_t CoWsCache::AddrParser::s_bytes_per_line;
+uint32_t CoWsCache::AddrParser::s_nsets;
 uint64_t CoWsCache::Line::bytes_per_line = 0;
-uint64_t CoWsCache::Line::dram_page_bytes = 0;
+
+static std::string addr_to_binary(Addr_t addr) {
+    std::string result;
+    int bits = sizeof(addr) * 8;
+    for(int i = bits - 1; i >= 0; i--) {
+        if(i!=0 && (i%8)==0)
+            result += ' ';
+        result += ((addr >> i) & 1) ? '1' : '0';
+    }
+    return result;
+}
+
+std::string CoWsCache::AddrParser::toString() const
+{
+    std::ostringstream os;
+
+    os<<"AddrParser:\t"<<"dram_page_bytes="<<s_dram_page_bytes<<", page_bits="<<getDramPageBits()<<", page_mask="<<std::hex<<getDramPageAddrMask()<<std::dec<<std::endl;
+    os<<"AddrParser:\t"<<"nsets="<<s_nsets<<", set_bit="<<getSetBits()<<", set_mask="<<std::hex<<getSetMask()<<std::dec<<std::endl;
+    os<<"AddrParser:\t"<<"s_bytes_per_line="<<s_bytes_per_line<<std::endl;;
+    os<<"AddrParser:\t\t"<<"addr     ="<<std::hex<<m_addr<<std::dec<<std::endl;
+    os<<"AddrParser:\t\t"<<"page_num ="<<std::hex<<getPageNum()<<std::dec<<std::endl;
+    os<<"AddrParser:\t\t"<<"tag      ="<<std::hex<<getTag()<<std::dec<<std::endl;
+    os<<"AddrParser:\t\t"<<"set_idx  ="<<std::hex<<getSetID()<<std::dec<<std::endl;
+    Addr_t page_num_bits = getPageNum() << getDramPageBits();
+    Addr_t set_bits = getSetID() << getDramPageBits();
+    Addr_t tag_bits = getTag() << (getDramPageBits() + getSetBits());
+    os<<"AddrParser:\t\t"<<"addr_bits   ="<<addr_to_binary(m_addr)<<std::endl;
+    os<<"AddrParser:\t\t"<<"pagenum_bits="<<addr_to_binary(page_num_bits)<<std::endl;
+    os<<"AddrParser:\t\t"<<"tag_bits    ="<<addr_to_binary(tag_bits)<<std::endl;
+    os<<"AddrParser:\t\t"<<"set_bits    ="<<addr_to_binary(set_bits)<<std::endl;
+
+    return os.str();
+}
 
 std::string
 CoWsCache::Line::toString() const
@@ -41,65 +76,74 @@ CoWsCache::Line::toString() const
     return oss.str();
 }
 
-bool CoWsCache::LRU_nohit::llc_hit(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const
+bool CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
     // on writes we access the mapping in the cows cache to update the block map, so we need it.
 
     // miss? get the page's cows entry from memory
     bool miss = false;
-    auto it = find_in_set(set, page_addr);
+    auto tag = page->getTag();
+    auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
 
-        it = alloc_line(cows_cache, set, page_addr);
+        it = alloc_line(set, page);
+    }
+    else {
+        move_to_mru(set, it);
     }
 
-    // block bit not set? set it and mark dirty
-    if(!it->getBlockID(block_id)) {
-        it->setBlockID(block_id, true);
-        it->setDirty(true);
+    // a write and block bit not set? set it and mark the entry dirty
+    if(is_write && !page->getBlockID(block_idx)) {
+        page->setBlockID(block_idx, true);
+        page->setDirty(true);
     }
 
     return miss;
 }
 
-bool CoWsCache::LRU_nohit::llc_miss(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id, bool is_write) const
+bool CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
+    auto tag = page->getTag();
     bool miss = false;
     // on a miss we access the mapping the cows cache (and insert it if it's not there)
-    auto it = find_in_set(set, page_addr);
+    auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
 
-        it = alloc_line(cows_cache, set, page_addr);
+        it = alloc_line(set, page);
+    }
+    else {
+        // move the accessed line to MRU (tail of list)
+        move_to_mru(set, it);
     }
 
     // we fetched the page rename data into the cache
     // on a write miss we need to make sure the the block is now renamed and set it dirty
     // on a read miss, no bits need updating.
-    if(is_write && !it->getBlockID(block_id)) {
-        it->setBlockID(block_id, true);
-        it->setDirty(true);
+    if(is_write && !page->getBlockID(block_idx)) {
+        page->setBlockID(block_idx, true);
+        page->setDirty(true);
     }
 
-    // move the accessed line to MRU (tail of list)
-    move_to_mru(set, it);
 
     return miss;
 }
 
-bool CoWsCache::LRU_nohit::llc_evict(CoWsCache& cows_cache, CacheSet_t& set, Addr_t page_addr, uint32_t block_id) const
+bool CoWsCache::LRU_nohit::llc_evict(CacheSet_t& set, Line* page, uint32_t block_idx) const
 {
+    auto tag = page->getTag();
     bool miss = false;
-    auto it = find_in_set(set, page_addr);
+    auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
 
-        it = alloc_line(cows_cache, set, page_addr);
+        it = alloc_line(set, page);
     }
-
-    // move the accessed line to MRU (tail of list)
-    move_to_mru(set, it);
+    else {
+        // hit? move the accessed line to MRU (tail of list)
+        move_to_mru(set, it);
+    }
 
     return miss;
 }
@@ -120,8 +164,8 @@ CoWsCache::CoWsCache(uint32_t nlines,
                 m_access_latency(access_latency),
                 m_stats(stats),
                 m_dram_latency_on_translation(dram_latency_on_translation),
-                m_dram_page_bit_offset(Line::getDramPageOffsetBits()),
-                m_dram_page_mask(Line::getDramPageAddrMask()),
+                m_dram_page_bit_offset(CoWsCache::AddrParser::getDramPageBits()),
+                m_dram_page_mask(CoWsCache::AddrParser::getDramPageAddrMask()),
                 m_lines_in_llc(0),
                 m_stats_cows2llc_valid(),
                 m_stats_cows_miss_clk(),
@@ -135,18 +179,21 @@ CoWsCache::CoWsCache(uint32_t nlines,
     assert(is_power_of_2(assoc));
     assert(is_power_of_2(m_cache_line_bytes));
     assert(is_power_of_2(m_dram_page_bytes));
+    assert(is_power_of_2(m_nsets));
 
     // set global cache line parameters
-    CoWsCache::Line::dram_page_bytes = dram_page_bytes;
     CoWsCache::Line::bytes_per_line = cache_line_bytes;
+    CoWsCache::AddrParser::s_dram_page_bytes = dram_page_bytes;
+    CoWsCache::AddrParser::s_bytes_per_line = cache_line_bytes;
+    CoWsCache::AddrParser::s_nsets = m_nsets;
 
     m_policy->setCowsCache(this);
 
     std::cerr<<"# COWs cache: dram: "
              <<", dram page bytes="<<dram_page_bytes
-             <<", dram_page_offset_bits="<<Line::getDramPageOffsetBits()
-             <<", dram_page_offset_mask=0x"<<std::hex<<Line::getDramPageOffsetMask()<<std::dec
-             <<", dram_page_addr_mask=0x"<<std::hex<<Line::getDramPageAddrMask()<<std::dec
+             <<", dram_page_offset_bits="<<CoWsCache::AddrParser::getDramPageBits()
+             <<", dram_page_offset_mask=0x"<<std::hex<<CoWsCache::AddrParser::getDramPageOffsetMask()<<std::dec
+             <<", dram_page_addr_mask=0x"<<std::hex<<CoWsCache::AddrParser::getDramPageAddrMask()<<std::dec
              <<std::endl;
 
     std::cerr<<"# COWs cache: dimensions: "
@@ -155,11 +202,11 @@ CoWsCache::CoWsCache(uint32_t nlines,
             <<", sets="<<m_nsets
             <<", m_assoc="<<m_assoc
             <<", tag bits="<<Line::getTagBits()
-            <<", data bits="<<Line::getNumBlocksPerPage()
+            <<", data bits="<<CoWsCache::AddrParser::getNumBlocksPerPage()
              <<std::endl;
 
     auto cows_cache_tag_bytes = (m_nsets * m_assoc * Line::getTagBits())/8;
-    auto cows_cache_data_bytes = (m_nsets * m_assoc * Line::getNumBlocksPerPage())/8; // 1 bit per block
+    auto cows_cache_data_bytes = (m_nsets * m_assoc * CoWsCache::AddrParser::getNumBlocksPerPage())/8; // 1 bit per block
     std::cerr<<"# COWs cache: bytes="
             <<"tag store="<<cows_cache_tag_bytes
             <<", data store="<<cows_cache_data_bytes
@@ -167,83 +214,64 @@ CoWsCache::CoWsCache(uint32_t nlines,
             <<std::endl;
 }
 
-bool CoWsCache::perfect_cache_lookup(Addr_t baddr, Line*& ret)
+std::pair<bool, CoWsCache::Line*> CoWsCache::perfect_cache_lookup(Addr_t page_addr)
 {
-    Addr_t page_addr = get_page_addr(baddr);
+    CoWsCache::Line* line = nullptr;
+
+    bool miss = false;
+
     auto it = m_perfect_cache.find(page_addr);
     if(it == m_perfect_cache.end()) {
-        ret = nullptr;
-        return false;
+        // insert new line and set mapping
+        Line& newline = m_perfect_cache[page_addr];
+        assert(newline.getNumBlocks() == 0); // make sure it's a fresh line.
+
+        newline.setPageAddr(page_addr);
+        newline.setValid(true);
+
+        line = &newline;
+        miss = true;
     }
-
-    ret = &it->second;
-    return true;
-}
-
-void CoWsCache::perfect_cache_insert(Addr_t page_addr, Addr_t real_phys_addr)
-{
-#if 0 /* debug */
-    if(m_perfect_cache.find(page_addr) != m_perfect_cache.end()) {
-        auto it = m_perfect_cache.find(page_addr);
-        std::cerr<<">>>>>> key=0x"<<std::hex<<it->first
-                 <<", val="<<it->second.toString()
-                 <<std::endl;
+    else {
+        line = &it->second;
+        miss=false;
     }
-#endif
-
-    assert(m_perfect_cache.find(page_addr) == m_perfect_cache.end()); // make sure page is not already in the cache
-
-    // insert new line and set mapping
-    Line& line = m_perfect_cache[page_addr];
-    line.setTag(page_addr);
-    line.setValid(true);
-    line.setRealAddr(real_phys_addr);
-}
-
-void CoWsCache::perfect_cache_erase(Addr_t baddr)
-{
-    Addr_t page_addr = get_page_addr(baddr);
-    assert(m_perfect_cache.find(page_addr) != m_perfect_cache.end()); // make sure page is already in the cache
-
-    // poison the Line before erasing it
-    auto it = m_perfect_cache.find(page_addr);
-    it->second.setValid(false);
-    it->second.setTag(0xdeadbeef12345678L);
-    m_perfect_cache.erase(it);
+    return {miss, line};
 }
 
 // this function is here as a placeholder for collecting statistics and calling the ReplPolicy hit method
-uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
+std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
     // on read hit we don't need to access the cows cache at all.
     if(!is_write) {
-        return 0;
+        return {true, 0};
     }
 
-    Addr_t page_addr = get_page_addr(baddr);
-    uint32_t block_id = get_block_id(baddr);
-    auto it = m_perfect_cache.find(page_addr);
+    AddrParser ap(baddr);
+    auto page_addr = ap.getPageAddr();
+    auto page_num = ap.getPageNum();
+    auto set_idx = ap.getSetID();
+    uint32_t block_idx = CoWsCache::AddrParser::getBlockIdx(baddr);
+
+    // get page data from main db
+    auto [perf_miss, page] = perfect_cache_lookup(page_addr);
 
     // miss latency is at least a cows cache access latency
-    uint32_t hit_lat = m_access_latency;
+    uint32_t latency = m_access_latency;
     s_cows_cycles_self += m_access_latency;
-
-    //
-    // perfect cache sanity
-    //
-    // it's a hit, so the dram page must already be available in the cows cache
-    assert(it != m_perfect_cache.end());
-
-    // it's a hit, so the block must already be available in the cows cache
-    assert(it->second.getBlockID(block_id));
 
     //
     // access cows cache
     //
     // tell the replacement policy's we have an llc write hit
-    auto set_idx = get_set_idx(page_addr);
     auto set = m_cache_sets[set_idx];
-    auto cows_cache_miss = m_policy->llc_hit(*this, set, page_addr, block_id, is_write);
+
+    auto cows_cache_miss = m_policy->llc_hit(set, page, block_idx, is_write);
+
+    if(s_misses >= total_llc_misses) {
+        printf("llc_hit[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
+                clk, baddr, (int)is_write, s_misses, total_llc_misses, perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
+    }
 
     // gather cows stats
     ++s_access;
@@ -257,48 +285,50 @@ uint32_t CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_ll
         track_misses(clk, total_llc_misses);
 
         // miss latency is at least a cows cache access latency
-        hit_lat += get_dram_latency_on_translation(page_addr);
+        latency += get_dram_latency_on_translation(page_num);
     }
     else {
         ++s_hits;
     }
 
-    s_cows_cycles += hit_lat;
+    s_cows_cycles += latency;
 
-    return hit_lat;
+    return {cows_cache_miss, latency};
 }
 
-uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
+std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
-    Addr_t page_addr = get_page_addr(baddr);
-    uint32_t block_id = get_block_id(baddr);
+    AddrParser ap(baddr);
+    auto page_addr = ap.getPageAddr();
+    auto page_num = ap.getPageNum();
+    auto set_idx = ap.getSetID();
+    uint32_t block_idx = CoWsCache::AddrParser::getBlockIdx(baddr);
+
     // miss latency is at least a cows cache access latency
-    uint32_t miss_latency = m_access_latency;
+    uint32_t latency = m_access_latency;
     s_cows_cycles_self += m_access_latency;
 
-    // update stats
-    m_lines_in_llc++;
-
-    //
-    // first update the perfect cache
-    //
-    auto it = m_perfect_cache.find(page_addr);
-    if(it == m_perfect_cache.end()) {
-        perfect_cache_insert(page_addr, page_addr + 1<<20);
-        it = m_perfect_cache.find(page_addr);
-
-        // update stats
-        uint32_t lines_in_cows = (uint32_t)m_perfect_cache.size();
-        m_stats_cows2llc_valid.push_back({lines_in_cows, m_lines_in_llc});
-    }
-    it->second.setBlockID(block_id, true);
+    // get page data from main db
+    auto [perf_miss, page] = perfect_cache_lookup(page_addr);
 
     //
     // now update the real cache we had a miss
     //
-    auto set_idx = get_set_idx(page_addr);
     auto& set = m_cache_sets[set_idx];
-    auto cows_cache_miss = m_policy->llc_miss(*this, set, page_addr, block_id, is_write);
+
+    auto cows_cache_miss = m_policy->llc_miss(set, page, block_idx, is_write);
+
+    if(s_misses >= total_llc_misses) {
+        printf("llc_miss[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
+                clk, baddr, (int)is_write, s_misses, total_llc_misses,  perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
+    }
+
+    if(cows_cache_miss != perf_miss) {
+        printf("llc_miss mismatch: cows_cache_miss=%d, perf_miss=%d, page_num=0x%lx\n",
+            (int)cows_cache_miss, (int)perf_miss, (unsigned long)page_num);
+        fflush(stdout);
+//        assert(cows_cache_miss == perf_miss);
+    }
 
     ++s_access;
     ++s_accesses_on_llc_miss;
@@ -310,50 +340,48 @@ uint32_t CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_l
 
         track_misses(clk, total_llc_misses);
 
-        miss_latency += get_dram_latency_on_translation(page_addr);
+        latency += get_dram_latency_on_translation(page_num);
     }
     else {
         ++s_hits;
     }
 
-    s_cows_cycles += miss_latency;
+    s_cows_cycles += latency;
 
-    return miss_latency;
+    return {cows_cache_miss, latency};
 }
 
-uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses)
+void foo_break() { printf("breaking here\n"); }
+
+std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses)
 {
-    Addr_t page_addr = get_page_addr(baddr);
-    uint32_t block_id = get_block_id(baddr);
-    uint32_t evict_latency = 0;
+    AddrParser ap(baddr);
+    auto page_addr = ap.getPageAddr();
+    auto page_num = ap.getPageNum();
+    auto set_idx = ap.getSetID();
+    uint32_t block_idx = CoWsCache::AddrParser::getBlockIdx(baddr);
 
-    //
-    // update perfect cache
-    //
-    auto it = m_perfect_cache.find(page_addr);
-    assert(it != m_perfect_cache.end());
-    it->second.setBlockID(block_id, false);
+    uint32_t latency = 0;
+    bool cows_cache_miss = false;
 
-    // update stats
-    m_lines_in_llc--;
-
-    // perfect cache: no more page lines in llc? evict
-    auto cnt = it->second.getNumBlocks();
-    if(cnt == 0) {
-        perfect_cache_erase(page_addr);
-    }
+    auto [perf_miss, page] = perfect_cache_lookup(page_addr);
 
     //
     // now update the real cache we had a miss
     //
     // we only need to access the cows cache if we evict a dirty page (need real mapping)
     if(evict_dirty) {
-        evict_latency += m_access_latency;
+        latency += m_access_latency;
         s_cows_cycles_self += m_access_latency;
 
-        auto set_idx = get_set_idx(page_addr);
         auto set = m_cache_sets[set_idx];
-        auto cows_cache_miss = m_policy->llc_evict(*this, set, page_addr, block_id);
+
+        cows_cache_miss = m_policy->llc_evict(set, page, block_idx);
+
+        if(s_misses >= total_llc_misses) {
+            printf("llc_evict[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
+                    clk, baddr, (int)false, s_misses, total_llc_misses, perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
+        }
 
         ++s_access;
         ++s_accesses_on_llc_evict;
@@ -365,16 +393,16 @@ uint32_t CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int tot
 
             track_misses(clk, total_llc_misses);
 
-            evict_latency += get_dram_latency_on_translation(page_addr);
+            latency += get_dram_latency_on_translation(page_num);
         }
         else {
             ++s_hits;
         }
     }
 
-    s_cows_cycles += evict_latency;
+    s_cows_cycles += latency;
 
-    return evict_latency;
+    return {cows_cache_miss, latency};
 }
 
 void CoWsCache::fini()
