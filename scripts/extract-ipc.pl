@@ -44,6 +44,10 @@ foreach my $f (@files) {
         my $insts = $cycles_per_core{$c};
 #        printf("IPC[%3d]=%4.2f\n", $c, ($insts/$cy));
     }
+    if($total_cycles == 0) {
+        print("IPC: Missing cycles in file $f\n");
+        next;
+    }
     printf("%s\n", $f);
     printf("%-30s: IPC[Total]=%.2f # (Total insts: %d, Total cycles: %d)\n",
             $name, ($total_insts/$total_cycles), ($total_insts), $total_cycles);
