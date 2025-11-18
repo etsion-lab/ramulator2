@@ -17,7 +17,7 @@ my %BENCHMARKS = (
     "graph-analytics-core" =>   { "cores" => [ 1, 8 ],  "half" => 0 },
     "in-memory-analytics-core" => { "cores" => [ 1, 8 ],    "half" => 0 },
     "media-streaming-core" =>   { "cores" => [ 1, 8 ],  "half" => 1 },
-    "web-search-core" =>        { "cores" => [ 1 ],     "half" => 1 },
+    "web-search-core" =>        { "cores" => [ 1, 8 ],     "half" => 1 },
     "web-serving-core" =>       { "cores" => [ 1, 8 ],  "half" => 1 },
 );
 
@@ -148,8 +148,11 @@ my %macros;
 
 # create rundir
 my $rundir = "$RESDIR/$test_name";
-$rundir = "$RESDIR/$rundir_prefix/$test_name" if(defined($rundir_prefix));
+if(defined($rundir_prefix)) {
+    $rundir = "$RESDIR/$rundir_prefix/$test_name";
+}
 system("mkdir -p $rundir");
+system("cp $confile $rundir/"); # save template config
 
 # create config file
 my $outconf = "$rundir/config";
