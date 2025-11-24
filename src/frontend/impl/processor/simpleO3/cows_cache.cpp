@@ -323,13 +323,6 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
                 clk, baddr, (int)is_write, s_misses, total_llc_misses,  perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
     }
 
-    if(cows_cache_miss != perf_miss) {
-        printf("llc_miss mismatch: cows_cache_miss=%d, perf_miss=%d, page_num=0x%lx\n",
-            (int)cows_cache_miss, (int)perf_miss, (unsigned long)page_num);
-        fflush(stdout);
-//        assert(cows_cache_miss == perf_miss);
-    }
-
     ++s_access;
     ++s_accesses_on_llc_miss;
     m_stats_set_access[set_idx]++;
