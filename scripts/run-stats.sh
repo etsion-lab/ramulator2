@@ -20,7 +20,7 @@ get_yaml_value() {
   grep -v "^ *\#" ${CONFIG} | grep "${key}:" | awk '{print $2}'
 }
 
-freq_human() {
+insts_human() {
   local hz="$1"
   # Normalize to float; treat input as Hz unless clearly MHz/GHz already
   if [ $hz -ge 1000000000 ]; then
@@ -47,7 +47,7 @@ drampage_kB=$(get_yaml_value "dram_page_bytes")
 
 echo NINSTS=$ninsts
 
-ninsts=$(freq_human $ninsts)
+ninsts=$(insts_human $ninsts)
 
 dirname="stats-8c-${ninsts}-LRU_nohit-ratio=${ratio}-cowslat=${cowslat}-llc=${llc}-drampage=${drampage_kB}"
 #dirname="base-8c-${ninsts}-nocows-no-zerocopy-accel"
