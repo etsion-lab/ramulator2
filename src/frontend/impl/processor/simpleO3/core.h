@@ -24,6 +24,12 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
       int bubble_count = 0;
       Addr_t load_addr = -1;
       Addr_t store_addr = -1;
+
+      std::string toString() const {
+        return "Bubbles: " + std::to_string(bubble_count) +
+               ", Load Addr: " + std::to_string(load_addr) +
+               ", Store Addr: " + std::to_string(store_addr);
+      }
     };
 
     std::vector<Inst> m_trace;

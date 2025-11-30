@@ -52,19 +52,24 @@ bool SimpleO3Core::Trace::read_next_inst()
 {
   std::string line;
 
-  while(true) {
+  while(m_trace_file.get() != nullptr && !m_trace_file->fail()) {
       std::getline(*m_trace_file, line);
       m_trace_nline++;
 
-//      fprintf(stderr, "line[%lu]='%s' (size=%lu)\n", m_trace_nline, line.c_str(), line.size());
+//      fprintf(stderr, "line[%lu]='%s' (size=%lu) m_trace_file->fail=%d m_trace_file->eof=%d\n", m_trace_nline, line.c_str(), line.size(), m_trace_file->fail(), m_trace_file->eof());
 
-      // skip blank lines (check for specific case to reduce parsing overhead)
+      // leave loop once we found a non-blank line (check for specific case to reduce parsing overhead)
       if(line.size()!=0 && !(line[0]=='\n' && line.size()==1))
         break;
   }
+
+  if((line.size() == 0) && m_trace_file->fail()) {
+      return false; // end of file
+  }
+
   std::vector<std::string> tokens;
 
-  // get inst tpe and remove comments (try to avoid regexp since it seems to run slower)
+  // get inst type and remove comments (try to avoid regexp since it seems to run slower)
   size_t type_pos = line.find("(");
   bool is_write_inject = (line[type_pos+1] == 'W' && line[type_pos+1] == 'I');
 
@@ -121,9 +126,9 @@ const SimpleO3Core::Trace::Inst& SimpleO3Core::Trace::get_next_inst() {
 
   const Inst& inst = m_trace[m_curr_trace_idx];
   m_curr_trace_idx = (m_curr_trace_idx + 1) % m_trace_length;
+
   return inst;
 }
-
 
 SimpleO3Core::InstWindow::InstWindow(int ipc, int depth):
 m_ipc(ipc), m_depth(depth),
@@ -178,6 +183,9 @@ SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts
   m_num_bubbles = inst.bubble_count;
   m_load_addr = inst.load_addr;
   m_writeback_addr = inst.store_addr;
+
+  // if no warmup, consider the warmup period finished at the beginning.
+  finished_warmup = (m_num_warmup_insts == 0);
 }
 
 void SimpleO3Core::tick() {
