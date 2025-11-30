@@ -67,11 +67,16 @@ def main(argv: list[str]) -> int:
     parser.add_argument("-b", "--bench", help="Specific benchmark to compare")
     parser.add_argument("-s", "--size", help="Benchmark size filter")
     parser.add_argument("-c", "--cores", help="Core count filter")
+    parser.add_argument("-t", "--base", help="Core count filter")
 
     args = parser.parse_args(argv)
 
     statname = args.stat_name
     testname = args.test_name
+
+    if args.base is not None:
+        global BASETST
+        BASETST = args.base
 
     if not statname.strip():
         print("Error: stat name cannot be empty.", file=sys.stderr)
@@ -92,6 +97,8 @@ def main(argv: list[str]) -> int:
         base_file = base_path / b / "out"
         bench_file = bench_path / b / "out"
 
+        print(f"processing {b}...\r", end="", flush=True)
+
         base_dict = load_ramulator_yaml(str(base_file))
         bench_dict = load_ramulator_yaml(str(bench_file))
         if base_dict is None or bench_dict is None:
@@ -105,9 +112,11 @@ def main(argv: list[str]) -> int:
 
         base_stat=base_dict['Frontend'].get(statname, 1)
         bench_stat=bench_dict['Frontend'].get(statname)
-        print(f"{b:<30} bench/base: {bench_stat/base_stat:12.2f} (base: {base_stat}, bench: {bench_stat})")
+        print(f"{b:<30} bench/base: {bench_stat/base_stat:12.3f} (base: {base_stat}, bench: {bench_stat})")
 
 
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+    # Progress print; put inside the for b in benchs loop
+    print(f"processing {b}...", end="", flush=True)
