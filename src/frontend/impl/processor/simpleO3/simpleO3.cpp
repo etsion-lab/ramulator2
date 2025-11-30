@@ -139,6 +139,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cows_cache->s_misses_on_llc_evict).name("cows_misses_on_llc_evict");
         register_stat(m_cows_cache->s_misses).name("cows_misses");
         register_stat(m_cows_cache->s_hits).name("cows_hits");
+        register_stat(m_cows_cache->s_evicts).name("cows_evicts");
         static auto cows_missrate = DIV(m_cows_cache->s_misses, m_cows_cache->s_access);
         register_stat(cows_missrate, false).name("cows_missrate");
 
