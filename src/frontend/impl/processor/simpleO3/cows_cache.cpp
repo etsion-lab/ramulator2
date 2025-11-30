@@ -11,6 +11,7 @@
 
 #include "cows_cache.h"
 
+#define PRINT_MISS_OVER_LLC 0
 
 namespace Ramulator {
 
@@ -76,18 +77,19 @@ CoWsCache::Line::toString() const
     return oss.str();
 }
 
-bool CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
+std::pair<bool,bool> CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
     // on writes we access the mapping in the cows cache to update the block map, so we need it.
 
     // miss? get the page's cows entry from memory
     bool miss = false;
+    bool need_evict = false;
     auto tag = page->getTag();
     auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
 
-        it = alloc_line(set, page);
+        std::tie(it, need_evict) = alloc_line(set, page);
     }
     else {
         move_to_mru(set, it);
@@ -99,19 +101,20 @@ bool CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_i
         page->setDirty(true);
     }
 
-    return miss;
+    return {miss, need_evict};
 }
 
-bool CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
+std::pair<bool,bool> CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
     auto tag = page->getTag();
     bool miss = false;
+    bool need_evict = false;
     // on a miss we access the mapping the cows cache (and insert it if it's not there)
     auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
 
-        it = alloc_line(set, page);
+        std::tie(it, need_evict) = alloc_line(set, page);
     }
     else {
         // move the accessed line to MRU (tail of list)
@@ -126,26 +129,25 @@ bool CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_
         page->setDirty(true);
     }
 
-
-    return miss;
+    return {miss, need_evict};
 }
 
-bool CoWsCache::LRU_nohit::llc_evict(CacheSet_t& set, Line* page, uint32_t block_idx) const
+std::pair<bool,bool> CoWsCache::LRU_nohit::llc_evict(CacheSet_t& set, Line* page, uint32_t block_idx) const
 {
     auto tag = page->getTag();
     bool miss = false;
+    bool need_evict = false;
     auto it = find_in_set(set, tag);
     if(it == set.end()) {
         miss = true;
-
-        it = alloc_line(set, page);
+        std::tie(it, need_evict) = alloc_line(set, page);
     }
     else {
         // hit? move the accessed line to MRU (tail of list)
         move_to_mru(set, it);
     }
 
-    return miss;
+    return {miss, need_evict};
 }
 
 CoWsCache::CoWsCache(uint32_t nlines,
@@ -266,9 +268,9 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
     // tell the replacement policy's we have an llc write hit
     auto set = m_cache_sets[set_idx];
 
-    auto cows_cache_miss = m_policy->llc_hit(set, page, block_idx, is_write);
+    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_hit(set, page, block_idx, is_write);
 
-    if(s_misses >= total_llc_misses) {
+    if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
         printf("llc_hit[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
                 clk, baddr, (int)is_write, s_misses, total_llc_misses, perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
     }
@@ -316,9 +318,9 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
     //
     auto& set = m_cache_sets[set_idx];
 
-    auto cows_cache_miss = m_policy->llc_miss(set, page, block_idx, is_write);
+    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_miss(set, page, block_idx, is_write);
 
-    if(s_misses >= total_llc_misses) {
+    if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
         printf("llc_miss[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
                 clk, baddr, (int)is_write, s_misses, total_llc_misses,  perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
     }
@@ -355,42 +357,45 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
     uint32_t block_idx = CoWsCache::AddrParser::getBlockIdx(baddr);
 
     uint32_t latency = 0;
-    bool cows_cache_miss = false;
+
+    // we only need to access the cows cache if we evict a dirty page (need real mapping)
+    if(!evict_dirty) {
+        // clean evict, no need to access cows cache, no added latency
+        return {false, 0};
+    }
 
     auto [perf_miss, page] = perfect_cache_lookup(page_addr);
 
     //
     // now update the real cache we had a miss
     //
-    // we only need to access the cows cache if we evict a dirty page (need real mapping)
-    if(evict_dirty) {
-        latency += m_access_latency;
-        s_cows_cycles_self += m_access_latency;
+    latency += m_access_latency;
+    s_cows_cycles_self += m_access_latency;
 
-        auto set = m_cache_sets[set_idx];
+    auto set = m_cache_sets[set_idx];
 
-        cows_cache_miss = m_policy->llc_evict(set, page, block_idx);
+    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_evict(set, page, block_idx);
 
-        if(s_misses >= total_llc_misses) {
-            printf("llc_evict[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
-                    clk, baddr, (int)false, s_misses, total_llc_misses, perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
-        }
+    if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
+        printf("llc_evict[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
+                clk, baddr, (int)false, s_misses, total_llc_misses, perf_miss, cows_cache_miss, s_access, s_misses_on_llc_miss, s_misses_on_llc_hit, s_misses_on_llc_evict);
+    }
 
-        ++s_access;
-        ++s_accesses_on_llc_evict;
-        m_stats_set_access[set_idx]++;
-        if(cows_cache_miss) {
-            ++s_misses;
-            ++s_misses_on_llc_evict;
-            m_stats_set_miss[set_idx]++;
+    ++s_access;
+    ++s_accesses_on_llc_evict;
+    m_stats_set_access[set_idx]++;
 
-            track_misses(clk, total_llc_misses);
+    if(cows_cache_miss) {
+        ++s_misses;
+        ++s_misses_on_llc_evict;
+        m_stats_set_miss[set_idx]++;
 
-            latency += get_dram_latency_on_translation(page_num);
-        }
-        else {
-            ++s_hits;
-        }
+        track_misses(clk, total_llc_misses);
+
+        latency += get_dram_latency_on_translation(page_num);
+    }
+    else {
+        ++s_hits;
     }
 
     s_cows_cycles += latency;

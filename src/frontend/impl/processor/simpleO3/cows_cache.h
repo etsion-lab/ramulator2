@@ -211,11 +211,13 @@ public:
             m_cows_cache = cows_cache;
         }
 
-        // all methods return true if there was a need to access the renaming table in DRAM
         virtual std::string name() const = 0;
-        virtual bool llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
-        virtual bool llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
-        virtual bool llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const = 0;
+        // all methods return:
+        // bool 1: hit/miss in the cows_cache
+        // bool 2: was a block evicted from the cows_cache
+        virtual std::pair<bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
+        virtual std::pair<bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
+        virtual std::pair<bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const = 0;
 
         protected:
         virtual CacheSet_t::iterator victim(CacheSet_t& set) const {
@@ -229,8 +231,9 @@ public:
             return std::find_if(set.begin(), set.end(), match);
         }
 
-        CacheSet_t::iterator alloc_line(CacheSet_t& set, Line* page) const {
+        std::pair<CacheSet_t::iterator, bool> alloc_line(CacheSet_t& set, Line* page) const {
             CacheSet_t::iterator it;
+            bool do_evict = false;
 
             // set not full? add a new line
             if(set.size() < m_cows_cache->m_assoc) {
@@ -238,6 +241,8 @@ public:
                 it = std::prev(set.end());
             }
             else {
+                do_evict = true;
+
                 // set is full so get the a victim
                 it = victim(set);
                 auto victim = *it;
@@ -252,7 +257,7 @@ public:
                 m_cows_cache->s_evicts++;
             }
 
-            return it;
+            return { it, do_evict };
         }
 
         void move_to_mru(CacheSet_t& set, CacheSet_t::iterator it) const {
@@ -280,9 +285,9 @@ public:
     class LRU_nohit : public ReplPolicy  {
         public:
         virtual std::string name() const override { return "LRU_nohit"; }
-        bool llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
-        bool llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
-        bool llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const override;
+        std::pair<bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
+        std::pair<bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
+        std::pair<bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const override;
     };
 
 private:
@@ -366,7 +371,8 @@ private:
         static uint64_t last_cows_miss_count = 0;
         static uint64_t last_llc_miss_count = 0;
 
-        if(clk - last_print >= 100000) {
+#if 0
+        if(clk - last_print >= 10000000) {
             Clk_t delta_clk = clk - last_print;
             uint64_t cows_delta_miss = s_misses - last_cows_miss_count;
             uint64_t llc_delta_miss = total_llc_misses - last_llc_miss_count;
@@ -382,6 +388,7 @@ private:
             last_cows_miss_count = s_misses;
             last_llc_miss_count = (uint64_t)total_llc_misses;
         }
+#endif
 
         m_stats_cows_miss_clk.push_back(clk);
     }
