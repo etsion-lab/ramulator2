@@ -97,7 +97,7 @@ program.add_argument("-c", "--config").metavar("\"dumped YAML configuration\"")
 
   int tick_mult = frontend_tick * mem_tick;
 
-  bool finished_warmup = false;
+  bool finished_warmup = frontend->is_warmup_finished();
 
   for (uint64_t i = 0;; i++) {
     if (((i % tick_mult) % mem_tick) == 0) {
@@ -109,6 +109,7 @@ program.add_argument("-c", "--config").metavar("\"dumped YAML configuration\"")
     }
 
     if(!finished_warmup && frontend->is_warmup_finished()) {
+      std::cerr<<"# >>>>>>>>>>>>>>>>  Finished warmup  <<<<<<<<<<<<<<"<<std::endl;
       frontend->reset_stats();
       memory_system->reset_stats();
       finished_warmup = true;
