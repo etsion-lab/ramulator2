@@ -88,9 +88,11 @@ bool SimpleO3LLC::send(Request req) {
     }
 
     // Add to the hit list to callback when finished
-    m_hit_list.push_back(std::make_pair(m_clk + m_latency, req));
+    m_hit_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, req));
     return true;
+
   } else {
+
     // Miss in the set
     DEBUG_LOG(DSIMPLEO3LLC, m_logger,
     "[Clk={}] Request Source: {}, Type: {}, Addr: {}, Index: {}, Tag: {}. Miss.",
