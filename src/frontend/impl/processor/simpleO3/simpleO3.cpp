@@ -79,7 +79,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         uint32_t llc_nlines = llc_capacity_per_core * m_num_cores / llc_linesize_bytes;
         uint32_t cows_nlines = llc_nlines / llc2cows_ratio;
         // cows line number must be a multiple of its assoc
-        cows_nlines = cows_cache_assoc * ((cows_nlines + cows_cache_assoc - 1) / cows_cache_assoc);
+        //cows_nlines = cows_cache_assoc * ((cows_nlines + cows_cache_assoc - 1) / cows_cache_assoc);
+        assert(cows_nlines % cows_cache_assoc == 0);
+        assert(cows_nlines >= cows_cache_assoc);
 
         std::cerr<<"# LLC bytes="<<(llc_nlines*llc_linesize_bytes)<<" (or "<<llc_capacity_per_core*m_num_cores<<"), lines: "<<llc_nlines<<", COWS lines: "<<cows_nlines<<std::endl;
 
@@ -145,6 +147,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
 
         static auto cows2llc_miss_ratio = DIV(m_cows_cache->s_misses, tot_llc_misses);
         register_stat(cows2llc_miss_ratio, false).name("cows2llc_miss_ratio");
+
+        static auto avg_dram_lat = DIV(m_cows_cache->s_avg_dram_lat_sum, m_cows_cache->s_avg_dram_lat_cnt);
+        register_stat(avg_dram_lat, false).name("avg_dram_latency");
       }
 
       std::vector<size_t*> tot_insts_post_warmup;
