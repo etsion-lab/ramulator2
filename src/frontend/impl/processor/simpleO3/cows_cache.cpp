@@ -265,7 +265,7 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
     //
     // access cows cache
     //
-    // tell the replacement policy's we have an llc write hit
+    // tell the replacement policy we have an llc write hit
     auto set = m_cache_sets[set_idx];
 
     auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_hit(set, page, block_idx, is_write);
@@ -358,12 +358,6 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
 
     uint32_t latency = 0;
 
-    // we only need to access the cows cache if we evict a dirty page (need real mapping)
-    if(!evict_dirty) {
-        // clean evict, no need to access cows cache, no added latency
-        return {false, 0};
-    }
-
     auto [perf_miss, page] = perfect_cache_lookup(page_addr);
 
     //
@@ -452,9 +446,22 @@ void CoWsCache::fini()
         of<<"# CoWs access: "<<s_access<<std::endl;
         of<<"# CoWs hits: "<<s_hits<<std::endl;
         of<<"# CoWs miss: "<<s_misses<<std::endl;
+        of<<"# SetID   Accesses[set]     Misses[set]"<<std::endl;
         for(uint32_t set=0; set<m_nsets; set++) {
             snprintf(outbuf, 1024, "%12u%12lu%12lu", set, m_stats_set_access[set], m_stats_set_miss[set]);
             of<<outbuf<<std::endl;
+        }
+    }
+
+    // dump stat: dram latency distribution
+    {
+        auto of = std::ofstream(m_stats.stats_fname + ".dram-latency");
+
+        std::cout<<"# Dumping CoWs stats"<<std::endl;
+        of<<"# CoWs stats"<<std::endl;
+        for(auto it : s_stats_dram_latency) {
+            auto latency = it;
+            of<<latency<<std::endl;
         }
     }
 }

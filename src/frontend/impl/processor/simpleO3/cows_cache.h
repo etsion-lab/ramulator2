@@ -337,6 +337,7 @@ public:
 
     Clk_t s_avg_dram_lat_sum = 0;
     Clk_t s_avg_dram_lat_cnt = 0;
+    std::vector<Clk_t> s_stats_dram_latency;
 
 public:
     CoWsCache(uint32_t nlines,
