@@ -33,30 +33,70 @@ insts_human() {
   printf "%s" "$out"
 }
 
+human_to_bytes() {
+  local size="$1"
+  if [[ "$size" =~ ^([0-9]+)([KMG]?)B?$ ]]; then
+    local num="${BASH_REMATCH[1]}"
+    local unit="${BASH_REMATCH[2]}"
+    case "$unit" in
+      K) echo $((num * 1024)) ;;
+      M) echo $((num * 1024 * 1024)) ;;
+      G) echo $((num * 1024 * 1024 * 1024)) ;;
+      *) echo "$num" ;;
+    esac
+  else
+    echo "Invalid size format: $size" >&2
+    return 1
+  fi
+}
+
 benchs1="data-analytics-core-1 data-caching-core-1 data-serving-core-1 graph-analytics-core-1 in-memory-analytics-core-1 media-streaming-core-1 web-search-core-1 web-serving-core-1"
 benchs8="data-analytics-core-8 data-caching-core-8 data-serving-core-8 graph-analytics-core-8 in-memory-analytics-core-8 media-streaming-core-8 web-search-core-8 web-serving-core-8"
 
-#benchs8="web-search-core-8"
+ncores=1
+if [ "$ncores" -eq 1 ]; then
+   benchs=$benchs1
+else
+   benchs=$benchs8
+fi
 
-#ninsts="100M"
+#benchs="web-search-core-8"
+#benchs="in-memory-analytics-core-8"
+
 ninsts=$(get_yaml_value "num_expected_insts")
+cows_enable=$(get_yaml_value "cows_enable")
 ratio=$(get_yaml_value "cows_cache2llc_ratio")
 cowslat=$(get_yaml_value "cows_cache_access_latency")
+cowsdramlat=$(get_yaml_value "cows_dram_latency_on_translation")
+cowsassoc=$(get_yaml_value "cows_cache_assoc")
 llc=$(get_yaml_value "llc_capacity_per_core")
 drampage_kB=$(get_yaml_value "dram_page_bytes")
 
-echo NINSTS=$ninsts
+# calc number of entries in cows cache
+llc_bytes=$(human_to_bytes $llc)
+line_size=$(get_yaml_value "llc_linesize")
+cows_entries=$((llc_bytes / (line_size * ratio)))
+echo llc_bytes=$llc_bytes, line_size=$line_size, ratio=$ratio, cowsassoc=$cowsassoc, cows_entries=$cows_entries
+
+echo ">>>NINSTS=$ninsts<<<"
 
 ninsts=$(insts_human $ninsts)
 
-dirname="stats-8c-${ninsts}-LRU_nohit-ratio=${ratio}-cowslat=${cowslat}-llc=${llc}-drampage=${drampage_kB}"
+echo cows_enable=$cows_enable
+
+suffix="${ninsts}-${ncores}c-llc=${llc}-drampage=${drampage_kB}"
+if [ "$cows_enable" = "true" ]; then
+  cows_suffix="ratio=${ratio}-cowsentries=${cows_entries}-cowslat=${cowslat}-cowsdramlat=${cowsdramlat}-cowsassoc=${cowsassoc}"
+  suffix="cows-${suffix}---${cows_suffix}"
+else
+  suffix="nocows-${suffix}"
+fi
+
+#dirname="stats-${suffix}"
 #dirname="base-8c-${ninsts}-nocows-no-zerocopy-accel"
-#dirname="tst-drampage=${drampage_kB}"
-
-benchs=$benchs8
-
-#benchs="in-memory-analytics-core-8"
-
+#dirname="tst-${suffix}"
+dirname="tst2-3200-${suffix}"
+#dirname="tst2"
 
 for b in $benchs; do
    echo $b

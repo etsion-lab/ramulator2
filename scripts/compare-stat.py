@@ -40,7 +40,17 @@ def load_ramulator_yaml(path: str) -> dict:
 
 #    print(f"Loading YAML from {path}, lines {start_idx} to {end_idx}")
 #    print(yaml_content)
-    return yaml.safe_load(yaml_content)
+    ret = yaml.safe_load(yaml_content)
+
+    ret['Frontend']['llc_total_hits'] = ret['Frontend'].get('llc_total_access', 1) - ret['Frontend'].get('llc_total_misses', 1)
+#    print("llc_total_hits: ", ret['Frontend']['llc_total_hits'])
+    ret['Frontend']['cows_misses_on_llc_hit_ratio'] = ret['Frontend'].get('cows_misses_on_llc_hit', 0) / ret['Frontend'].get('llc_total_hits', 1)
+#    print("cows_misses_on_llc_hit_ratio: ", ret['Frontend']['cows_misses_on_llc_hit_ratio'])
+    ret['Frontend']['cows_misses_on_llc_miss_ratio'] = ret['Frontend'].get('cows_misses_on_llc_miss', 0) / ret['Frontend'].get('llc_total_misses', 1)
+#    print("cows_misses_on_llc_miss_ratio: ", ret['Frontend']['cows_misses_on_llc_miss_ratio'])
+
+
+    return ret
 
 def compute_ipc(data: dict) -> float:
     """Compute IPC and add it to the Frontend section."""
@@ -86,7 +96,7 @@ def main(argv: list[str]) -> int:
         return 1
 
 
-    benchs = [f for f in os.listdir(BASEDIR + "/" + testname) if f.endswith('-8')]
+    benchs = [f for f in os.listdir(BASEDIR + "/" + testname) if f.endswith('-8') or f.endswith('-1')]
 
     base_path = Path(BASEDIR) / BASETST
     bench_path = Path(BASEDIR) / testname
@@ -112,7 +122,9 @@ def main(argv: list[str]) -> int:
 
         base_stat=base_dict['Frontend'].get(statname, 1)
         bench_stat=bench_dict['Frontend'].get(statname)
-        print(f"{b:<30} bench/base: {bench_stat/base_stat:12.3f} (base: {base_stat}, bench: {bench_stat})")
+#        print(f"bench {b}: Base {statname}: {base_stat}, Bench {statname}: {bench_stat}")
+        ratio = bench_stat / base_stat if base_stat != 0 else float('inf')
+        print(f"{b:<30} bench/base: {ratio:12.3f} (base: {base_stat}, bench: {bench_stat})")
 
 
 
