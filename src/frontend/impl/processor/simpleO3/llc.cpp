@@ -84,11 +84,15 @@ bool SimpleO3LLC::send(Request req) {
     bool cows_hit = false;
     if(m_cows_cache != nullptr) {
       // The cows cache needs to be updated on a write hit (update block map)
-       std::tie(cows_hit, cows_latency) = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
+      // DONT ACCESS COWS CACHE ON HITS
+      //       std::tie(cows_hit, cows_latency) = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
     // Add to the hit list to callback when finished
     m_hit_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, req));
+    if(m_hit_list.size() > 10) {
+      printf("*********** m_hit_list.size()=%lu\n", m_hit_list.size());
+    }
     return true;
 
   } else {
@@ -99,12 +103,6 @@ bool SimpleO3LLC::send(Request req) {
     m_clk, req.source_id, req.type_id, req.addr, get_index(req.addr), get_tag(req.addr), m_clk, m_clk + m_latency
     );
 
-    if (req.type_id == Request::Type::Read) {
-      s_llc_read_misses++;
-    } else if (req.type_id == Request::Type::Write) {
-      s_llc_write_misses++;
-    }
-
     bool dirty = (req.type_id == Request::Type::Write);
     if (req.type_id == Request::Type::Write) {
       req.type_id = Request::Type::Read;
@@ -112,6 +110,23 @@ bool SimpleO3LLC::send(Request req) {
 
     // MSHR lookup
     auto mshr_it = check_mshr_hit(req.addr);
+
+    // MSHR miss and MSHR full? stall the request.
+    // We do not count this as an LLC miss since the request cannot be sent to the memory system yet.
+    if ((mshr_it == m_mshrs.end()) && (m_mshrs.size() == m_num_mshrs)) {
+      DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "No MSHR entry available.", m_clk);
+      s_llc_mshr_unavailable++;
+      return false;
+    }
+
+    // count LLC miss
+    if (req.type_id == Request::Type::Read) {
+      s_llc_read_misses++;
+    } else if (req.type_id == Request::Type::Write) {
+      s_llc_write_misses++;
+    }
+
+    // MSHR hit processing: add the request to the MSHR entry and return
     if (mshr_it != m_mshrs.end()) {
       DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "MSHR Hit.", m_clk);
       // Add new req to MSHR_requests
@@ -119,14 +134,6 @@ bool SimpleO3LLC::send(Request req) {
 
       mshr_it->second->dirty = dirty || mshr_it->second->dirty;
       return true;
-    }
-
-    // MSHR miss
-    // Check if there is available MSHR entry
-    if (m_mshrs.size() == m_num_mshrs) {
-      DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "No MSHR entry available.", m_clk);
-      s_llc_mshr_unavailable++;
-      return false;
     }
 
     // Check if there is available cache line in the set
@@ -165,6 +172,13 @@ bool SimpleO3LLC::send(Request req) {
     bool cows_hit = false;
     if(m_cows_cache != nullptr) {
       std::tie(cows_hit, cows_latency) = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
+
+      printf("cows_miss[clk=%lu]: total_misses=%d, cows_misses=%lu [h=%lu, m=%lu, e=%lu] (addr=0x%lx, is_write=%d, llc_lat=%u, cows_lat=%u)\n",
+              m_clk,
+              total_misses(), m_cows_cache->s_misses,
+              m_cows_cache->s_misses_on_llc_hit, m_cows_cache->s_misses_on_llc_miss, m_cows_cache->s_misses_on_llc_evict,
+              req.addr, (int)(req.type_id == Request::Type::Write),
+              m_latency, cows_latency);
     }
 
     // Add to the miss request list
@@ -177,8 +191,13 @@ bool SimpleO3LLC::send(Request req) {
 void SimpleO3LLC::receive(Request& req) {
   req.mc2llc = m_clk;
 
-  //auto latency = req.mc2llc - req.llc2mc;
-  //fprintf(stderr, "Latency: %lu clocks (avg=%lu)\n", latency, m_cows_cache->s_avg_dram_lat_sum/m_cows_cache->s_avg_dram_lat_cnt);
+  auto latency = req.mc2llc - req.llc2mc;
+  if(m_cows_cache != nullptr) {
+    m_cows_cache->s_avg_dram_lat_sum += latency;
+    m_cows_cache->s_avg_dram_lat_cnt += 1;
+    m_cows_cache->s_stats_dram_latency.push_back(latency);
+    //printf("Latency: %lu clocks (avg=%lu)\n", latency, m_cows_cache->s_avg_dram_lat_sum/m_cows_cache->s_avg_dram_lat_cnt);
+  }
 
   auto it = std::find_if(
     m_mshrs.begin(), m_mshrs.end(),
@@ -239,17 +258,17 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
 
   // Generate writeback request if victim line is dirty
   if (victim_it->dirty) {
+    // Yoav: if the line is dirty, we need to consult the cows_cache about the target address
+    bool cows_miss = false;
+    uint32_t cows_latency = 0;
+    if(m_cows_cache != nullptr) {
+      std::tie(cows_miss, cows_latency) = m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk, total_misses());
+    }
+
     Request writeback_req(victim_it->addr, Request::Type::Write);
-    m_miss_list.push_back(std::make_pair(m_clk + m_latency, writeback_req));
+    m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, writeback_req));
 
-    DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "Writeback Request will be issued at Clk={}.", m_clk + m_latency);
-  }
-
-  // Yoav: update cows cache on eviction
-  if(m_cows_cache != nullptr) {
-    // no additional latency if evict misses, since we already pay for the miss
-    // (evict is only called in the context of a miss)
-    m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk, total_misses());
+    DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "Writeback Request will be issued at Clk={}.", m_clk + m_latency + cows_latency);
   }
 
   set.erase(victim_it);

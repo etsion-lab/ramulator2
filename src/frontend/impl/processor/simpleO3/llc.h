@@ -17,7 +17,7 @@
 namespace Ramulator {
 
 DECLARE_DEBUG_FLAG(DSIMPLEO3LLC);
-// ENABLE_DEBUG_FLAG(DSIMPLEO3LLC);
+ENABLE_DEBUG_FLAG(DSIMPLEO3LLC);
 
 class SimpleO3LLC : public Clocked<SimpleO3LLC> {
   friend class SimpleO3;
