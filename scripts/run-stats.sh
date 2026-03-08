@@ -52,8 +52,9 @@ human_to_bytes() {
 
 benchs1="data-analytics-core-1 data-caching-core-1 data-serving-core-1 graph-analytics-core-1 in-memory-analytics-core-1 media-streaming-core-1 web-search-core-1 web-serving-core-1"
 benchs8="data-analytics-core-8 data-caching-core-8 data-serving-core-8 graph-analytics-core-8 in-memory-analytics-core-8 media-streaming-core-8 web-search-core-8 web-serving-core-8"
+#benchs8="data-analytics-core-8"
 
-ncores=1
+ncores=8
 if [ "$ncores" -eq 1 ]; then
    benchs=$benchs1
 else
@@ -69,8 +70,10 @@ ratio=$(get_yaml_value "cows_cache2llc_ratio")
 cowslat=$(get_yaml_value "cows_cache_access_latency")
 cowsdramlat=$(get_yaml_value "cows_dram_latency_on_translation")
 cowsassoc=$(get_yaml_value "cows_cache_assoc")
+cowsalways_miss=$(get_yaml_value "cows_always_miss")
 llc=$(get_yaml_value "llc_capacity_per_core")
 drampage_kB=$(get_yaml_value "dram_page_bytes")
+latmul=$(get_yaml_value "latency_factor")
 
 # calc number of entries in cows cache
 llc_bytes=$(human_to_bytes $llc)
@@ -84,18 +87,18 @@ ninsts=$(insts_human $ninsts)
 
 echo cows_enable=$cows_enable
 
-suffix="${ninsts}-${ncores}c-llc=${llc}-drampage=${drampage_kB}"
+suffix="${ninsts}-${ncores}c-llc=${llc}-drampage=${drampage_kB}-latmul=${latmul}"
 if [ "$cows_enable" = "true" ]; then
-  cows_suffix="ratio=${ratio}-cowsentries=${cows_entries}-cowslat=${cowslat}-cowsdramlat=${cowsdramlat}-cowsassoc=${cowsassoc}"
+  cows_suffix="ratio=${ratio}-cowsentries=${cows_entries}-cowslat=${cowslat}-cowsdramlat=${cowsdramlat}-cowsassoc=${cowsassoc}-cowsforcemiss=${cowsalways_miss}"
   suffix="cows-${suffix}---${cows_suffix}"
 else
   suffix="nocows-${suffix}"
 fi
 
-#dirname="stats-${suffix}"
+dirname="stats-${suffix}"
 #dirname="base-8c-${ninsts}-nocows-no-zerocopy-accel"
 #dirname="tst-${suffix}"
-dirname="tst2-3200-${suffix}"
+#dirname="tst2-${suffix}"
 #dirname="tst2"
 
 for b in $benchs; do
