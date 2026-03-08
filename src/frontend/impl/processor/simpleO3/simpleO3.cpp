@@ -25,7 +25,6 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
 
     std::string serialization_filename;
 
-
   public:
     void init() override {
       m_clock_ratio = param<uint>("clock_ratio").required();
@@ -36,6 +35,8 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
 
       int ipc   = param<int>("ipc").desc("IPC of the SimpleO3 core.").default_val(4);
       int depth = param<int>("inst_window_depth").desc("Instruction window size of the SimpleO3 core.").default_val(128);
+      uint32_t lat_factor = param<uint32_t>("latency_factor").desc("Multiple all memory latencies by that factor.").default_val(1);
+      set_latency_factor(lat_factor);
 
       // LLC params
       int llc_latency           = param<int>("llc_latency").desc("Aggregated latency of the LLC.").default_val(47);
@@ -52,6 +53,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       uint32_t llc2cows_ratio = param<uint32_t>("cows_cache2llc_ratio").desc("Ratio between the number of LLC cache lines and CoWs cache entries.").required();
       uint32_t cows_cache_assoc = param<uint32_t>("cows_cache_assoc").desc("Associativity of CoWs cache.").required();
       uint32_t dram_page_bytes = parse_capacity_str(param<std::string>("dram_page_bytes").desc("size of DRAM page.").required());
+      uint32_t always_miss = param<bool>("cows_always_miss").desc("Always miss in CoWs cache.").required();
       std::string cows_replacement = param<std::string>("cows_replacement").desc("Replacement policy in CoWs cache.").required();
       CoWsCache::ReplPolicy *cows_policy = nullptr;
       if(cows_replacement == "LRU_nohit") {
@@ -89,6 +91,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
                                     cows_cache_assoc,
                                     llc_linesize_bytes,
                                     dram_page_bytes,
+                                    always_miss,
                                     cows_cache_access_latency,
                                     dram_latency_on_translation,
                                     cows_policy,
@@ -148,8 +151,14 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         static auto cows2llc_miss_ratio = DIV(m_cows_cache->s_misses, tot_llc_misses);
         register_stat(cows2llc_miss_ratio, false).name("cows2llc_miss_ratio");
 
-        static auto avg_dram_lat = DIV(m_cows_cache->s_avg_dram_lat_sum, m_cows_cache->s_avg_dram_lat_cnt);
-        register_stat(avg_dram_lat, false).name("avg_dram_latency");
+        static auto avg_dram_lat = DIV(m_llc->s_avg_dram_read_lat_sum, m_llc->s_avg_dram_read_lat_cnt);
+        register_stat(avg_dram_lat, false).name("avg_dram_read_latency");
+
+        static auto avg_total_lat = DIV(m_llc->s_avg_total_read_lat_sum, m_llc->s_avg_total_read_lat_cnt);
+        register_stat(avg_total_lat, false).name("avg_total_read_latency");
+
+        static auto avg_total_miss_lat = DIV(m_llc->s_avg_total_read_miss_lat_sum, m_llc->s_avg_total_read_miss_lat_cnt);
+        register_stat(avg_total_miss_lat, false).name("avg_total_read_miss_latency");
       }
 
       std::vector<size_t*> tot_insts_post_warmup;
@@ -193,12 +202,25 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
     }
 
     void receive(Request& req) {
+      req.done = m_clk;
       m_llc->receive(req);
 
       // TODO: LLC latency for the core to receive the request?
       for (auto r : m_llc->m_receive_requests[req.addr]) {
-        r.arrive = req.arrive;
-        r.depart = req.depart;
+        r.done = m_clk;
+
+        // collect total read latency samples
+        auto total_read_latency = r.done - r.core2llc;
+        m_llc->s_avg_total_read_lat_sum += total_read_latency;
+        m_llc->s_avg_total_read_lat_cnt += 1;
+        m_llc->s_stats_read_latencies.push_back(std::make_tuple(r.addr, total_read_latency));
+
+        if(r.cache_status != Request::CacheStatus::Hit) {
+          m_llc->s_avg_total_read_miss_lat_sum += total_read_latency;
+          m_llc->s_avg_total_read_miss_lat_cnt += 1;
+          m_llc->s_stats_read_miss_latencies.push_back(std::make_tuple(r.addr, total_read_latency));
+        }
+
         m_cores[r.source_id]->receive(r);
       }
       m_llc->m_receive_requests[req.addr].clear();
@@ -213,6 +235,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       if(m_cows_cache != nullptr) {
         m_cows_cache->fini();
       }
+      m_llc->fini();
 
       return true;
     }

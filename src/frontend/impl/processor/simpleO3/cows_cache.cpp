@@ -154,6 +154,7 @@ CoWsCache::CoWsCache(uint32_t nlines,
                      uint32_t assoc,
                      uint32_t cache_line_bytes,
                      uint32_t dram_page_bytes,
+                     bool always_miss,
                      uint32_t access_latency,
                      uint32_t dram_latency_on_translation,
                      CoWsCache::ReplPolicy* policy,
@@ -163,6 +164,7 @@ CoWsCache::CoWsCache(uint32_t nlines,
                 m_assoc(assoc),
                 m_cache_line_bytes(cache_line_bytes),
                 m_dram_page_bytes(dram_page_bytes),
+                m_always_miss(always_miss),
                 m_access_latency(access_latency),
                 m_stats(stats),
                 m_dram_latency_on_translation(dram_latency_on_translation),
@@ -269,6 +271,9 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
     auto set = m_cache_sets[set_idx];
 
     auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_hit(set, page, block_idx, is_write);
+    if(m_always_miss) {
+        cows_cache_miss = true;
+    }
 
     if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
         printf("llc_hit[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
@@ -319,6 +324,9 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
     auto& set = m_cache_sets[set_idx];
 
     auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_miss(set, page, block_idx, is_write);
+    if(m_always_miss) {
+        cows_cache_miss = true;
+    }
 
     if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
         printf("llc_miss[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
@@ -369,6 +377,9 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
     auto set = m_cache_sets[set_idx];
 
     auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_evict(set, page, block_idx);
+    if(m_always_miss) {
+        cows_cache_miss = true;
+    }
 
     if(PRINT_MISS_OVER_LLC && s_misses > total_llc_misses) {
         printf("llc_evict[clk=%lu]: baddr=0x%lx, is_write=%d (s_misses=%lu, llc_misses=%d)\t[perf/miss=%d/%d, s_access=%lu, on_llc_miss=%lu, on_llc_hit=%lu, on_llc_evict=%lu]\n",
@@ -450,18 +461,6 @@ void CoWsCache::fini()
         for(uint32_t set=0; set<m_nsets; set++) {
             snprintf(outbuf, 1024, "%12u%12lu%12lu", set, m_stats_set_access[set], m_stats_set_miss[set]);
             of<<outbuf<<std::endl;
-        }
-    }
-
-    // dump stat: dram latency distribution
-    {
-        auto of = std::ofstream(m_stats.stats_fname + ".dram-latency");
-
-        std::cout<<"# Dumping CoWs stats"<<std::endl;
-        of<<"# CoWs stats"<<std::endl;
-        for(auto it : s_stats_dram_latency) {
-            auto latency = it;
-            of<<latency<<std::endl;
         }
     }
 }

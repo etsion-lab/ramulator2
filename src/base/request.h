@@ -22,17 +22,30 @@ struct Request {
     };
   };
 
+  struct CacheStatus {
+    enum : int {
+      Unknown = -1,
+      Miss = 0,
+      Hit,
+      HalfMiss,
+    };
+  };
+
   int type_id = -1;    // An identifier for the type of the request
   int source_id = -1;  // An identifier for where the request is coming from (e.g., which core)
+
+  int cache_status = CacheStatus::Unknown;  // Whether the request is a hit or miss in the cache (Unknown if not applicable)
 
   int command = -1;          // The command that need to be issued to progress the request
   int final_command = -1;    // The final command that is needed to finish the request
   bool is_stat_updated = false; // Memory controller stats
 
+  Clk_t core2llc = -1;   // Clock cycle when the request arrives at LLC
   Clk_t arrive = -1;   // Clock cycle when the request arrive at the memory controller
   Clk_t depart = -1;   // Clock cycle when the request depart the memory controller
   Clk_t llc2mc = -1;   // Clock cycle when the request departs LLC to MC
   Clk_t mc2llc = -1;   // Clock cycle when the request arrives at LLC from MC
+  Clk_t done = -1;     // Clock cycle when the request arrives at the core
 
   std::array<int, 4> scratchpad = { 0 };    // A scratchpad for the request
 

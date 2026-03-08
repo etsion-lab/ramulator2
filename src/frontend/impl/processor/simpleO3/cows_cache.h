@@ -305,6 +305,8 @@ private:
     const uint32_t m_dram_page_bit_offset;
     const Addr_t m_dram_page_mask;
 
+    const bool m_always_miss;
+
     // perfect cache
     std::unordered_map<Addr_t, Line> m_perfect_cache;
 
@@ -335,15 +337,12 @@ public:
     uint64_t s_cows_cycles = 0;
     uint64_t s_cows_cycles_self = 0;
 
-    Clk_t s_avg_dram_lat_sum = 0;
-    Clk_t s_avg_dram_lat_cnt = 0;
-    std::vector<Clk_t> s_stats_dram_latency;
-
 public:
     CoWsCache(uint32_t nlines,
               uint32_t assoc,
               uint32_t cache_line_bytes,
               uint32_t dram_page_bytes,
+              bool always_miss,
               uint32_t access_latency,
               uint32_t dram_latency_on_translation,
               CoWsCache::ReplPolicy* policy,

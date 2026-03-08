@@ -26,6 +26,7 @@ void SimpleO3LLC::tick() {
   while (it != m_miss_list.end()) {
     if (m_clk >= it->first) {
       it->second.llc2mc = m_clk;
+      it->second.mc2llc = m_clk; // this field will be updated when the request arrives at LLC from MC. We set it here since not all requests are sent back to us.
       if (!m_memory_system->send(it->second)) {
         it++;
       }
@@ -54,6 +55,7 @@ void SimpleO3LLC::tick() {
 };
 
 bool SimpleO3LLC::send(Request req) {
+  req.core2llc = m_clk;
   CacheSet_t& set = get_set(req.addr);
 
 #if 0
@@ -72,8 +74,7 @@ bool SimpleO3LLC::send(Request req) {
     // Hit in the set
     DEBUG_LOG(DSIMPLEO3LLC, m_logger,
     "[Clk={}] Request Source: {}, Type: {}, Addr: {}, Index: {}, Tag: {}. Hit, will finish at Clk={}",
-    m_clk, req.source_id, req.type_id, req.addr, get_index(req.addr), get_tag(req.addr), m_clk, m_clk + m_latency
-    );
+    m_clk, req.source_id, req.type_id, req.addr, get_index(req.addr), get_tag(req.addr), m_clk, m_clk + m_latency);
 
     // Update the LRU status
     set.push_back({req.addr, get_tag(req.addr), line_it->dirty || (req.type_id == Request::Type::Write), true});
@@ -88,11 +89,13 @@ bool SimpleO3LLC::send(Request req) {
       //       std::tie(cows_hit, cows_latency) = m_cows_cache->llc_hit(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
     }
 
+    req.cache_status = Request::CacheStatus::Hit;
+
     // Add to the hit list to callback when finished
     m_hit_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, req));
-    if(m_hit_list.size() > 10) {
-      printf("*********** m_hit_list.size()=%lu\n", m_hit_list.size());
-    }
+//    if(m_hit_list.size() > 10) {
+//      printf("*********** m_hit_list.size()=%lu\n", m_hit_list.size());
+//    }
     return true;
 
   } else {
@@ -129,6 +132,9 @@ bool SimpleO3LLC::send(Request req) {
     // MSHR hit processing: add the request to the MSHR entry and return
     if (mshr_it != m_mshrs.end()) {
       DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "MSHR Hit.", m_clk);
+
+      req.cache_status = Request::CacheStatus::HalfMiss;
+
       // Add new req to MSHR_requests
       m_receive_requests[mshr_it->first].push_back(req);
 
@@ -181,6 +187,8 @@ bool SimpleO3LLC::send(Request req) {
               m_latency, cows_latency);
     }
 
+    req.cache_status = Request::CacheStatus::Miss;
+
     // Add to the miss request list
     m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, req));
 
@@ -191,18 +199,24 @@ bool SimpleO3LLC::send(Request req) {
 void SimpleO3LLC::receive(Request& req) {
   req.mc2llc = m_clk;
 
-  auto latency = req.mc2llc - req.llc2mc;
-  if(m_cows_cache != nullptr) {
-    m_cows_cache->s_avg_dram_lat_sum += latency;
-    m_cows_cache->s_avg_dram_lat_cnt += 1;
-    m_cows_cache->s_stats_dram_latency.push_back(latency);
-    //printf("Latency: %lu clocks (avg=%lu)\n", latency, m_cows_cache->s_avg_dram_lat_sum/m_cows_cache->s_avg_dram_lat_cnt);
+  Clk_t dram_read_latency = req.cache_status == Request::CacheStatus::Miss ? req.mc2llc - req.llc2mc : 0;
+
+  if(dram_read_latency > 1000000) {
+    printf("High latency: %lu cycles for addr=%#lx (req.mc2llc=%lu, req.llc2mc=%lu)\n",
+      dram_read_latency, req.addr, req.mc2llc, req.llc2mc);
+  }
+
+  if(dram_read_latency != 0) {
+      s_avg_dram_read_lat_sum += dram_read_latency;
+      s_avg_dram_read_lat_cnt++;
+      s_stats_dram_latency.push_back(std::make_tuple(req.addr, dram_read_latency));
   }
 
   auto it = std::find_if(
     m_mshrs.begin(), m_mshrs.end(),
     [&req, this](MSHREntry_t mshr_entry) { return (align(mshr_entry.first) == align(req.addr)); }
   );
+
 
   DEBUG_LOG(DSIMPLEO3LLC, m_logger, "[Clk={}] Request {} received.", m_clk, req.addr);
 
@@ -345,6 +359,36 @@ void SimpleO3LLC::dump_llc() {
       std::cout << it1->first << "," << it2->addr << "," << it2->tag << "," << it2->dirty << "," << it2->ready << std::endl;
     }
   }
+}
+
+void SimpleO3LLC::dump_dram_read_latency_samples()
+{
+        auto of = std::ofstream(m_stats_name + ".dram-read-latency");
+
+        of<<"# DRAM read latency [addr, latency]"<<std::endl;
+        for(auto it : s_stats_dram_latency) {
+            auto [addr, latency] = it;
+            of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<std::endl;
+        }
+        of.close();
+}
+
+void SimpleO3LLC::dump_total_read_latency_samples()
+{
+        auto of = std::ofstream(m_stats_name + ".total-read-latency");
+
+        of<<"# Total read latency [addr, latency]"<<std::endl;
+        for(auto it : s_stats_read_latencies) {
+            auto [addr, latency] = it;
+            of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<std::endl;
+        }
+        of.close();
+}
+
+void SimpleO3LLC::fini()
+{
+  dump_dram_read_latency_samples();
+  dump_total_read_latency_samples();
 }
 
 }        // namespace Ramulator

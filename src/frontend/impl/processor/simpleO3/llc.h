@@ -72,8 +72,19 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int s_llc_eviction = 0;
     int s_llc_mshr_unavailable = 0;
 
+    std::string m_stats_name = "llc";
+    std::vector<std::tuple<Addr_t, Clk_t>> s_stats_dram_latency; // dram read latency for all requests that miss in the LLC (addr, latency) pairs
+    std::vector<std::tuple<Addr_t, Clk_t>> s_stats_read_latencies; // total read latency for all requests
+    std::vector<std::tuple<Addr_t, Clk_t>> s_stats_read_miss_latencies; // total read latency for all requests
 
-  public:
+    Clk_t s_avg_total_read_lat_sum = 0;
+    Clk_t s_avg_total_read_lat_cnt = 0;
+    Clk_t s_avg_total_read_miss_lat_sum = 0;
+    Clk_t s_avg_total_read_miss_lat_cnt = 0;
+    Clk_t s_avg_dram_read_lat_sum = 0;
+    Clk_t s_avg_dram_read_lat_cnt = 0;
+
+    public:
     SimpleO3LLC(int latency, int size_bytes, int linesize_bytes, int associativity, int num_mshrs, CoWsCache* cows_cache);
     void connect_memory_system(IMemorySystem* memory_system) { m_memory_system = memory_system; };
 
@@ -88,6 +99,11 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int total_misses() {
       return s_llc_read_misses + s_llc_write_misses;
     }
+
+    // called when simulation finished to dump stats
+    void fini();
+    void dump_dram_read_latency_samples();
+    void dump_total_read_latency_samples();
 
   private:
     int get_index(Addr_t addr)  { return (addr >> m_index_offset) & m_index_mask; };
