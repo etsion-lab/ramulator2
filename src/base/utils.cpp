@@ -4,6 +4,7 @@
 
 namespace Ramulator {
 
+uint32_t g_latency_factor = 1;
 
 size_t parse_capacity_str(std::string size_str) {
   std::string suffixes[3] = {"KB", "MB", "GB"};

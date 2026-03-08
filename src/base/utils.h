@@ -7,9 +7,17 @@
 
 namespace Ramulator {
 
+extern uint32_t g_latency_factor;
+static inline void set_latency_factor(uint32_t factor) {
+  g_latency_factor = factor;
+}
+static inline uint32_t latmul(uint32_t latency) {
+  return latency * g_latency_factor;
+}
+
 /************************************************
  *     Utility Functions for Parsing Configs
- ***********************************************/   
+ ***********************************************/
 
 /**
  * @brief    Parse capacity strings (e.g., KB, MB) into the number of bytes
@@ -29,7 +37,7 @@ size_t parse_frequency_str(std::string size_str);
 
 /**
  * @brief Convert a timing constraint in nanoseconds into number of cycles according to JEDEC convention.
- * 
+ *
  * @param t_ns      Timing constraint in nanoseconds
  * @param tCK_ps    Clock cycle in picoseconds
  * @return uint64_t Number of cycles
@@ -39,7 +47,7 @@ uint64_t JEDEC_rounding(float t_ns, int tCK_ps);
 
 /**
  * @brief Convert a timing constraint in nanoseconds into number of cycles according to JEDEC DDR5 convention.
- * 
+ *
  * @param t_ns      Timing constraint in nanoseconds
  * @param tCK_ps    Clock cycle in picoseconds
  * @return uint64_t Number of cycles
@@ -49,14 +57,14 @@ uint64_t JEDEC_rounding_DDR5(float t_ns, int tCK_ps);
 
 /************************************************
  *       Bitwise Operations for Integers
- ***********************************************/   
+ ***********************************************/
 
 /**
  * @brief Calculate how many bits are needed to store val
- * 
- * @tparam Integral_t 
- * @param val 
- * @return Integral_t 
+ *
+ * @tparam Integral_t
+ * @param val
+ * @return Integral_t
  */
 template <typename Integral_t>
 Integral_t calc_log2(Integral_t val) {
@@ -71,11 +79,11 @@ Integral_t calc_log2(Integral_t val) {
 
 /**
  * @brief Slice the lest significant num_bits from addr and return these bits. The originial addr value is modified.
- * 
- * @tparam Integral_t 
- * @param addr 
- * @param num_bits 
- * @return Integral_t 
+ *
+ * @tparam Integral_t
+ * @param addr
+ * @param num_bits
+ * @return Integral_t
  */
 template <typename Integral_t>
 Integral_t slice_lower_bits(Integral_t& addr, int num_bits) {
@@ -89,7 +97,7 @@ Integral_t slice_lower_bits(Integral_t& addr, int num_bits) {
 
 /************************************************
  *                Tokenization
- ***********************************************/   
+ ***********************************************/
 void tokenize(std::vector<std::string>& tokens, std::string line, std::string delim);
 
 }           // namespace Ramulator
