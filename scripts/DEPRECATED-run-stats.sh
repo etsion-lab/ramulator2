@@ -64,7 +64,15 @@ fi
 #benchs="web-search-core-8"
 #benchs="in-memory-analytics-core-8"
 
-ninsts=$(get_yaml_value "num_expected_insts")
+#ninsts=(100000000)    # 10M (testing)
+ninsts=(1000000000)    # 100M
+#ninsts=(10000000000)    # 1G
+#ninsts=(100000000000)    # 10G
+
+cows_enable=(true)
+
+
+#ninsts=$(get_yaml_value "num_expected_insts")
 cows_enable=$(get_yaml_value "cows_enable")
 ratio=$(get_yaml_value "cows_cache2llc_ratio")
 cowslat=$(get_yaml_value "cows_cache_access_latency")

@@ -93,15 +93,31 @@ sub gen_config($$$) {
         my $line = $_;
 
         # find macros
-        if($line =~ /^(\s*)([A-Z_]+[0-9]*)\s*$/) {
-            my $s = $1;
+        if($line =~ /^(\s*)(__[A-Z_0-9]+__)\s*$/) {
+            # just the macro in the line. macro can be an array of strings or a single string
+            my $prefix = $1;
             my $macro = $2;
 
             die "Error: undefined macro \"$macro\"" if(!defined($map->{$macro}));
-            my @l = @{$map->{$macro}};
-            foreach (@l) {
-                print $fout "$s" . $_ . "\n";
+            if(ref($map->{$macro}) eq 'ARRAY') {
+                my @l = @{$map->{$macro}};
+                foreach (@l) {
+                    print $fout "$prefix" . $_ . "\n";
+                }
             }
+            else {
+                print $fout "$prefix" . $map->{$macro} . "\n";
+            }
+        }
+        elsif($line =~ /^(\s*[a-z_0-9]+):\s*(__[A-Z_][A-Z0-9_]+__)\s*$/) {
+            # line as: "name: MACRO". macro must be a single string
+            my $prefix = $1;
+            my $macro = $2;
+
+            die "Error: undefined macro \"$macro\"" if(!defined($map->{$macro}));
+            die "Error: macro must be a string for line format \"name: MACRO\"" if(ref($map->{$macro}) eq 'ARRAY');
+
+            print $fout "$prefix: " . $map->{$macro} . "\n";
         }
         else {
             print $fout "$line\n";
@@ -113,7 +129,7 @@ sub gen_config($$$) {
 }
 
 sub usage($) {
-    printf("%s: <--name run-name> <--config config-file> [-d rundir-prefix] <--bench bench1> [--bench bench2...]\n", $0);
+    printf("%s: <--name run-name> <--config config-file> [-d rundir-prefix] [-DKEY=value ...] <--bench bench1> [--bench bench2...]\n", $0);
 }
 
 #
@@ -124,6 +140,18 @@ my $test_name;
 my $confile;
 my $rundir_prefix;
 my $help;
+my @macro_defs;
+
+my @argv_filtered;
+foreach my $arg (@ARGV) {
+    if($arg =~ /^-D(.+)$/) {
+        push(@macro_defs, $1);
+    }
+    else {
+        push(@argv_filtered, $arg);
+    }
+}
+@ARGV = @argv_filtered;
 
 my $argc = scalar(@ARGV);
 
@@ -144,7 +172,15 @@ die "Error: no test name specified" if(!defined($test_name));
 die "Error: no config file specified" if(!defined($confile));
 
 my %macros;
-@{$macros{"TRACES"}} = build_trace_list(@benchs);
+@{$macros{"__TRACES__"}} = build_trace_list(@benchs);
+foreach my $macro_def (@macro_defs) {
+    if($macro_def !~ /^(__[A-Z_][A-Z0-9_]+__)=(.*)$/) {
+        die "Error: invalid macro definition \"$macro_def\". Expected -DKEY=value with KEY in CAPS and _/digits";
+    }
+    my $key = $1;
+    my $value = $2;
+    $macros{$key} = $value;
+}
 
 # create rundir
 my $rundir = "$RESDIR/$test_name";

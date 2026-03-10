@@ -1,16 +1,20 @@
 Frontend:
   impl: SimpleO3
-  ipc: 6
-  inst_window_depth: 200
+  ipc: 8
+  inst_window_depth: 256
   clock_ratio: 1
-  num_expected_insts: 100000000    # 100M
+  num_expected_insts: __NINSTS__
+#  num_expected_insts: 100000000    # 100M
 #  num_expected_insts: 300000000    # 300M
 #  num_expected_insts: 1000000000    # 1G
 #  num_expected_insts: 10000000000  # 10G
 #  num_expected_insts: 20000000000  # 20G
-#  num_expected_insts: 1000000 # testing
+#  num_expected_insts: 10000000 # testing 10M
+#  num_expected_insts: 1000000 # testing 1M
+  latency_factor: 1
+  warmup_percent: 25
   traces:
-    TRACES
+    __TRACES__
 #  - traces/in-memory-analytics-core-1/trace.cpu0:0
 #  - traces/in-memory-analytics-core-1/trace.cpu0:1
 #  - traces/in-memory-analytics-core-1/trace.cpu0:2
@@ -23,12 +27,20 @@ Frontend:
   llc_num_mshr_per_core: 16
   llc_capacity_per_core: 2MB
 
-  cows_enable: true
-  cows_accel_zero_page: true
-  cows_dram_latency_on_translation: 134
-  cows_cache_access_latency: 8
-  cows_cache2llc_ratio: 8
-  cows_cache_assoc: 8
+  cows_accel_zero_page: false
+
+  cows_enable: __COWS_ENABLE__
+  cows_always_miss: __COWS_ALWAYS_MISS__
+#  cows_always_miss: false
+  cows_dram_latency_on_translation: 400
+#  cows_dram_latency_on_translation: 0
+  cows_cache_access_latency: 0
+  cows_cache2llc_ratio: __COWS_CACHE2LLC_RATIO__
+#  cows_cache2llc_ratio: 1
+#  cows_cache2llc_ratio: 4096
+#  cows_cache2llc_ratio: 32768
+#  cows_cache_assoc: 1
+  cows_cache_assoc: __COWS_CACHE_ASSOC__
   dram_page_bytes: 8KB
   cows_stats_file: cows_stats
   cows_replacement: LRU_nohit
@@ -50,8 +62,11 @@ MemorySystem:
     org:
 #      preset: DDR5_32Gb_x8
       preset: DDR5_64Gb_x8
-      channel: 12
+      channel: 8
       rank: 2
+#      channel_widths_in_block: 16 # default
+      # N * 4B (32b channel width)
+      block_size_as_channel_widths: 16
     timing:
 #      preset: DDR5_3200C
       preset: DDR5_8000C
@@ -62,6 +77,7 @@ MemorySystem:
 
   Controller:
     impl: Generic
+    controller_stats_name_prefix: controller_stats
     Scheduler:
       impl: FRFCFS
     RefreshManager:
@@ -77,3 +93,4 @@ MemorySystem:
   AddrMapper:
 #    impl: RoBaRaCoCh
     impl: RoBaRaChCo
+    contig_block_bytes: 64
