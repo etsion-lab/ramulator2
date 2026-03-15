@@ -60,6 +60,7 @@ BASE_TEST = {
     "__COWS_CACHE2LLC_RATIO__": [1],
     "__COWS_CACHE_ASSOC__": [8],
     "__COWS_ALWAYS_MISS__": ["false"],
+    "dir_prefix": "base",
 }
 
 COWS_FORCE_MISS_TEST = {
@@ -70,29 +71,25 @@ COWS_FORCE_MISS_TEST = {
     "__COWS_CACHE2LLC_RATIO__": [1],
     "__COWS_CACHE_ASSOC__": [8],
     "__COWS_ALWAYS_MISS__": ["true"],
+    "dir_prefix": "base",
 }
 
 CURR_TEST = {
     "__NINSTS__": [__NINSTS__],
     "__COWS_ENABLE__": ["true"],
-    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 32, 16, 1],
+    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 1],
+#    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 32, 16, 1],
 
     "__COWS_CACHE_ASSOC__": [8],
     "__COWS_ALWAYS_MISS__": ["false"],
+    "dir_prefix": "stats2",
 }
 
 TEST=[
-#    CURR_TEST,
-    BASE_TEST,
-#    COWS_FORCE_MISS_TEST
+    CURR_TEST,
+#    BASE_TEST,
+    COWS_FORCE_MISS_TEST
 ]
-dir_prefix = "tst"
-
-#TEST=BASE_TEST
-#dir_prefix = "base"
-
-#TEST=COWS_FORCE_MISS_TEST
-#dir_prefix = "cowsskip"
 
 ncores = 8
 
@@ -153,9 +150,26 @@ def human_to_bytes(size: str) -> int:
 
 
 def flatten_test_matrix(test: dict) -> list[dict]:
-    keys = list(test.keys())
-    value_lists = [test[k] for k in keys]
-    return [dict(zip(keys, combo)) for combo in product(*value_lists)]
+    base = {}
+    explode_keys = []
+    explode_values = []
+
+    for key, value in test.items():
+        if isinstance(value, list):
+            explode_keys.append(key)
+            explode_values.append(value)
+        else:
+            base[key] = value
+
+    if not explode_keys:
+        return [base.copy()]
+
+    cases = []
+    for combo in product(*explode_values):
+        case = base.copy()
+        case.update(dict(zip(explode_keys, combo)))
+        cases.append(case)
+    return cases
 
 
 #
@@ -172,8 +186,15 @@ def main() -> int:
         if not isinstance(t, dict):
             print("Error: all test matrices must be dictionaries.", file=sys.stderr)
             return 1
-        all_tests.extend(flatten_test_matrix(t))
+        new_tests = flatten_test_matrix(t)
+        print(f"new tests: {len(new_tests)}")
+        for test in new_tests:
+            print(f"\t{test}")
+        print()
 
+        all_tests.extend(new_tests)
+
+#    sys.exit(0)
 
     # ninsts = get_yaml_value("num_expected_insts")
 #    cowslat = get_yaml_value("cows_cache_access_latency")
@@ -203,20 +224,22 @@ def main() -> int:
  #       )
 
         suffix = f"{ninsts}-{ncores}c-llc={llc_per_core}-drampage={drampage_kB}-latmul={latmul}"
-        if test_case["__COWS_ENABLE__"] == "true":
+        if test_case["__COWS_ENABLE__"] == "false":
+            suffix = f"nocows-{suffix}"
+        elif test_case["__COWS_ALWAYS_MISS__"] == "true":
+            suffix = f"skipcows-{suffix}"
+        else:
             cows_suffix = (
                 f"cowsratio={test_case['__COWS_CACHE2LLC_RATIO__']}-"
                 f"cowsassoc={test_case['__COWS_CACHE_ASSOC__']}-"
                 f"cowsdramlat={cowsdramlat}-"
-                f"cowsforcemiss={test_case['__COWS_ALWAYS_MISS__']}"
             )
             suffix = f"cows-{suffix}---{cows_suffix}"
-        else:
-            suffix = f"nocows-{suffix}"
 
+        dir_prefix = test_case['dir_prefix']
         dirname = f"{dir_prefix}-{suffix}"
 
-        test_vars = [f"-D{k}={v}" for k, v in test_case.items()]
+        test_vars = [f"-D{k}={v}" for k, v in test_case.items() if k.startswith("__")]
         for b in benchs.split():
             print(b)
             cmd = [
