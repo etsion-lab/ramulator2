@@ -28,6 +28,7 @@ struct Request {
       Miss = 0,
       Hit,
       HalfMiss,
+      CowsMiss
     };
   };
 
