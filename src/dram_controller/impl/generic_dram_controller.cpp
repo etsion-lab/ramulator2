@@ -168,6 +168,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
     bool send(Request& req) override {
       req.final_command = m_dram->m_request_translations(req.type_id);
 
+//      printf("DRAM Controller: Received request. clk=%lu, addr=0x%lx, type=%d, cache_status=%d\n", m_clk, req.addr, req.type_id, req.cache_status);
+
       switch (req.type_id) {
         case Request::Type::Read: {
           s_num_read_reqs++;
@@ -194,13 +196,6 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
           // The request will depart at the next cycle
           req.depart = m_clk + 1;
 
-
-            if (is_debug_addr(req)) {
-              std::fprintf(stdout, "DEBUG req read forward clk=%llu (arrive=%llu, depart=%llu)\n",
-                          static_cast<unsigned long long>(req.depart-req.arrive),
-                          static_cast<unsigned long long>(req.arrive),
-                          static_cast<unsigned long long>(req.depart));
-            }
           pending.push_back(req);
           return true;
         }
@@ -378,6 +373,8 @@ class GenericDRAMController final : public IDRAMController, public Implementatio
             m_total_latency_samples.push_back(std::make_tuple(req.addr, req.depart - req.core2llc));
             s_read_latency += req.depart - req.arrive;
           }
+
+//          printf("DRAM Controller: request complete. clk=%lu, addr=0x%lx, type=%d, cache_status=%d\n", m_clk, req.addr, req.type_id, req.cache_status);
 
           if (req.callback) {
             // If the request comes from outside (e.g., processor), call its callback
