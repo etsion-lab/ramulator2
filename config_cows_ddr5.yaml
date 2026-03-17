@@ -32,7 +32,7 @@ Frontend:
   cows_enable: __COWS_ENABLE__
   cows_always_miss: __COWS_ALWAYS_MISS__
 #  cows_always_miss: false
-  cows_dram_latency_on_translation: 400
+  cows_dram_latency_on_translation: __COWS_DRAM_LATENCY_ON_TRANSLATION__
 #  cows_dram_latency_on_translation: 0
   cows_cache_access_latency: 0
   cows_cache2llc_ratio: __COWS_CACHE2LLC_RATIO__

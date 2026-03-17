@@ -48,46 +48,55 @@ benchs8 = (
 
 #    __NINSTS__=insts_human2hz("10M") # testing
 __NINSTS__=insts_human2hz("100M")
-#    __NINSTS__=insts_human2hz("1G")
+#__NINSTS__=insts_human2hz("1G")
 #    __NINSTS__=insts_human2hz("10G")
 #    __NINSTS__=insts_human2hz("20G")
+
+#__COWS_DRAM_LATENCY_ON_TRANSLATION__ = 500
+__COWS_DRAM_LATENCY_ON_TRANSLATION__ = 400
+
 
 BASE_TEST = {
     "__NINSTS__": [__NINSTS__],
     "__COWS_ENABLE__": ["false"],
+    "dir_prefix": "base",
 
     # dummy values
     "__COWS_CACHE2LLC_RATIO__": [1],
     "__COWS_CACHE_ASSOC__": [8],
     "__COWS_ALWAYS_MISS__": ["false"],
-    "dir_prefix": "base",
+    "__COWS_DRAM_LATENCY_ON_TRANSLATION__": [0],
 }
 
 COWS_FORCE_MISS_TEST = {
     "__NINSTS__": [__NINSTS__],
     "__COWS_ENABLE__": ["true"],
+    "__COWS_ALWAYS_MISS__": ["true"],
+    "dir_prefix": "base",
 
     # dummy values
     "__COWS_CACHE2LLC_RATIO__": [1],
     "__COWS_CACHE_ASSOC__": [8],
-    "__COWS_ALWAYS_MISS__": ["true"],
-    "dir_prefix": "base",
+    "__COWS_DRAM_LATENCY_ON_TRANSLATION__": [__COWS_DRAM_LATENCY_ON_TRANSLATION__],
 }
 
 CURR_TEST = {
     "__NINSTS__": [__NINSTS__],
     "__COWS_ENABLE__": ["true"],
-    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 1],
-#    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 32, 16, 1],
+#    "__COWS_CACHE2LLC_RATIO__": [1024, 512, 256, 128, 64, 1],
+    "__COWS_CACHE2LLC_RATIO__": [32768, 8192, 1024, 512, 256, 128, 64, 1],
+#    "__COWS_CACHE2LLC_RATIO__": [1024, 256, 128, 64, 1],
 
     "__COWS_CACHE_ASSOC__": [8],
     "__COWS_ALWAYS_MISS__": ["false"],
-    "dir_prefix": "stats2",
+    "__COWS_DRAM_LATENCY_ON_TRANSLATION__": [__COWS_DRAM_LATENCY_ON_TRANSLATION__],
+#    "__COWS_DRAM_LATENCY_ON_TRANSLATION__": [500, 600, 700, 800],
+    "dir_prefix": "stats3",
 }
 
 TEST=[
     CURR_TEST,
-#    BASE_TEST,
+    BASE_TEST,
     COWS_FORCE_MISS_TEST
 ]
 
@@ -198,7 +207,6 @@ def main() -> int:
 
     # ninsts = get_yaml_value("num_expected_insts")
 #    cowslat = get_yaml_value("cows_cache_access_latency")
-    cowsdramlat = get_yaml_value("cows_dram_latency_on_translation")
     llc_per_core = get_yaml_value("llc_capacity_per_core")
     drampage_kB = get_yaml_value("dram_page_bytes")
     latmul = get_yaml_value("latency_factor")
@@ -215,6 +223,8 @@ def main() -> int:
 #        )
 
         ninsts = insts_hz2human(str(test_case['__NINSTS__']))
+        cowsdramlat = test_case['__COWS_DRAM_LATENCY_ON_TRANSLATION__']
+
         print(f">>>NINSTS={test_case['__NINSTS__']}<<<")
 
 
@@ -232,7 +242,7 @@ def main() -> int:
             cows_suffix = (
                 f"cowsratio={test_case['__COWS_CACHE2LLC_RATIO__']}-"
                 f"cowsassoc={test_case['__COWS_CACHE_ASSOC__']}-"
-                f"cowsdramlat={cowsdramlat}-"
+                f"cowsdramlat={cowsdramlat}"
             )
             suffix = f"cows-{suffix}---{cows_suffix}"
 
