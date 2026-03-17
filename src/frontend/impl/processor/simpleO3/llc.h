@@ -71,11 +71,15 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     int s_llc_write_misses = 0;
     int s_llc_eviction = 0;
     int s_llc_mshr_unavailable = 0;
+    int s_llc_total_cows_latency = 0;
 
     std::string m_stats_name = "llc";
     std::vector<std::tuple<Addr_t, Clk_t>> s_stats_dram_latency; // dram read latency for all requests that miss in the LLC (addr, latency) pairs
     std::vector<std::tuple<Addr_t, Clk_t>> s_stats_read_latencies; // total read latency for all requests
-    std::vector<std::tuple<Addr_t, Clk_t>> s_stats_read_miss_latencies; // total read latency for all requests
+    std::vector<std::tuple<Addr_t, Clk_t, int>> s_stats_read_miss_latencies; // total read latency for read misses
+
+    Clk_t s_last_mshr_change_clk = 0;
+    std::vector<std::tuple<Clk_t, Clk_t, size_t>> s_stats_mshr_utilization; // mshr utilization over time
 
     Clk_t s_avg_total_read_lat_sum = 0;
     Clk_t s_avg_total_read_lat_cnt = 0;
@@ -104,6 +108,8 @@ class SimpleO3LLC : public Clocked<SimpleO3LLC> {
     void fini();
     void dump_dram_read_latency_samples();
     void dump_total_read_latency_samples();
+    void dump_total_read_miss_latency_samples();
+    void dump_mshr_utilization();
 
   private:
     int get_index(Addr_t addr)  { return (addr >> m_index_offset) & m_index_mask; };
