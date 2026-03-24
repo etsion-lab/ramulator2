@@ -43,11 +43,19 @@ def load_ramulator_yaml(path: str) -> dict:
     ret = yaml.safe_load(yaml_content)
 
     ret['Frontend']['llc_total_hits'] = ret['Frontend'].get('llc_total_access', 1) - ret['Frontend'].get('llc_total_misses', 1)
-#    print("llc_total_hits: ", ret['Frontend']['llc_total_hits'])
+    ret['Frontend']['llc_write_access_ratio'] = ret['Frontend'].get('llc_write_access', 0) / ret['Frontend'].get('llc_total_access', 1)
     ret['Frontend']['cows_misses_on_llc_hit_ratio'] = ret['Frontend'].get('cows_misses_on_llc_hit', 0) / ret['Frontend'].get('llc_total_hits', 1)
 #    print("cows_misses_on_llc_hit_ratio: ", ret['Frontend']['cows_misses_on_llc_hit_ratio'])
     ret['Frontend']['cows_misses_on_llc_miss_ratio'] = ret['Frontend'].get('cows_misses_on_llc_miss', 0) / ret['Frontend'].get('llc_total_misses', 1)
 #    print("cows_misses_on_llc_miss_ratio: ", ret['Frontend']['cows_misses_on_llc_miss_ratio'])
+
+    total_insts = 0
+    for k, v in ret['Frontend'].items():
+        if k.startswith('total_insts_retired_post_warmup_core_'):
+            total_insts += v
+    ret['Frontend']['total_insts'] = total_insts
+    ret['Frontend']['llc_mpki'] = ret['Frontend'].get('llc_total_misses', 0) / (total_insts / 1000) if total_insts > 0 else 0
+
 
 
     return ret
@@ -111,8 +119,8 @@ def main(argv: list[str]) -> int:
     for b in benchs:
         if(args.nvals is not None):
             print(f"\n\nComparing stats for benchmark {b}...")
-
-        print(f"processing {b}...\r", end="", flush=True)
+        else:
+            print(f"processing {b}...\r", end="", flush=True)
 
         # read db for baseline
         base_file = base_path / b / "out"
