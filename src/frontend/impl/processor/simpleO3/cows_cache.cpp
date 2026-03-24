@@ -77,77 +77,95 @@ CoWsCache::Line::toString() const
     return oss.str();
 }
 
-std::pair<bool,bool> CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
+std::tuple<bool,bool,bool> CoWsCache::LRU_nohit::llc_hit(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
     // on writes we access the mapping in the cows cache to update the block map, so we need it.
 
     // miss? get the page's cows entry from memory
     bool miss = false;
+    bool miss_not_handled = false;
     bool need_evict = false;
     auto tag = page->getTag();
     auto it = find_in_set(set, tag);
-    if(it == set.end()) {
-        miss = true;
 
-        std::tie(it, need_evict) = alloc_line(set, page);
+    if(it != set.end()) {
+        // HIT. move the accessed line to MRU (tail of list)
+        move_to_mru(set, it);
     }
     else {
-        move_to_mru(set, it);
+        // MISS. we access the mapping the cows cache (and insert it if it's not there)
+        miss = true;
+        std::tie(it, need_evict) = alloc_line(set, page);
+        if(it == set.end()) {
+            // no victim available (e.g., all lines are pending). Cannot handle the miss.
+            miss_not_handled = true;
+        }
     }
 
     // a write and block bit not set? set it and mark the entry dirty
-    if(is_write && !page->getBlockID(block_idx)) {
+    if(!miss_not_handled && is_write && !page->getBlockID(block_idx)) {
         page->setBlockID(block_idx, true);
         page->setDirty(true);
     }
 
-    return {miss, need_evict};
+    return {miss, need_evict, miss_not_handled};
 }
 
-std::pair<bool,bool> CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
+std::tuple<bool,bool,bool> CoWsCache::LRU_nohit::llc_miss(CacheSet_t& set, Line* page, uint32_t block_idx, bool is_write) const
 {
     auto tag = page->getTag();
     bool miss = false;
+    bool miss_not_handled = false;
     bool need_evict = false;
     // on a miss we access the mapping the cows cache (and insert it if it's not there)
     auto it = find_in_set(set, tag);
-    if(it == set.end()) {
+    if(it != set.end()) {
+        // HIT. move the accessed line to MRU (tail of list)
+        move_to_mru(set, it);
+    }
+    else {
         miss = true;
 
         std::tie(it, need_evict) = alloc_line(set, page);
-    }
-    else {
-        // move the accessed line to MRU (tail of list)
-        move_to_mru(set, it);
+        if(it == set.end()) {
+            // no victim available (e.g., all lines are pending). Cannot handle the miss.
+            miss_not_handled = true;
+        }
     }
 
     // we fetched the page rename data into the cache
     // on a write miss we need to make sure the the block is now renamed and set it dirty
     // on a read miss, no bits need updating.
-    if(is_write && !page->getBlockID(block_idx)) {
+    if(!miss_not_handled && is_write && !page->getBlockID(block_idx)) {
         page->setBlockID(block_idx, true);
         page->setDirty(true);
     }
 
-    return {miss, need_evict};
+    return {miss, need_evict, miss_not_handled};
 }
 
-std::pair<bool,bool> CoWsCache::LRU_nohit::llc_evict(CacheSet_t& set, Line* page, uint32_t block_idx) const
+std::tuple<bool,bool,bool> CoWsCache::LRU_nohit::llc_evict(CacheSet_t& set, Line* page, uint32_t block_idx) const
 {
     auto tag = page->getTag();
     bool miss = false;
+    bool miss_not_handled = false;
     bool need_evict = false;
     auto it = find_in_set(set, tag);
-    if(it == set.end()) {
-        miss = true;
-        std::tie(it, need_evict) = alloc_line(set, page);
-    }
-    else {
-        // hit? move the accessed line to MRU (tail of list)
+    if(it != set.end()) {
+        // HIT. move the accessed line to MRU (tail of list)
         move_to_mru(set, it);
     }
+    else {
+        // MISS. we access the mapping the cows cache (and insert it if it's not there)
+        miss = true;
+        std::tie(it, need_evict) = alloc_line(set, page);
+        if(it == set.end()) {
+            // no victim available (e.g., all lines are pending). Cannot handle the miss.
+            miss_not_handled = true;
+        }
+    }
 
-    return {miss, need_evict};
+    return {miss, need_evict, miss_not_handled};
 }
 
 CoWsCache::CoWsCache(uint32_t nlines,
@@ -218,7 +236,21 @@ CoWsCache::CoWsCache(uint32_t nlines,
             <<std::endl;
 }
 
-std::pair<bool, CoWsCache::Line*> CoWsCache::perfect_cache_lookup(Addr_t page_addr)
+void CoWsCache::check_pending_lines(Clk_t clk) {
+    for(auto it = m_pending_lines.begin(); it != m_pending_lines.end(); ) {
+        auto* line = *it;
+        if(line->checkIfReady(clk)) {
+            // this line is ready now, we can remove it from the pending list
+            (*it)->setPending(false);
+            it = m_pending_lines.erase(it);
+        }
+        else {
+            // this line is still not ready, keep it in the pending list
+            ++it;
+        }
+    }
+}
+std::tuple<bool, CoWsCache::Line*> CoWsCache::perfect_cache_lookup(Addr_t page_addr)
 {
     CoWsCache::Line* line = nullptr;
 
@@ -244,11 +276,11 @@ std::pair<bool, CoWsCache::Line*> CoWsCache::perfect_cache_lookup(Addr_t page_ad
 }
 
 // this function is here as a placeholder for collecting statistics and calling the ReplPolicy hit method
-std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
+std::tuple<bool, uint32_t, bool> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
     // on read hit we don't need to access the cows cache at all.
     if(!is_write) {
-        return {true, 0};
+        return {true, 0, false};
     }
 
     AddrParser ap(baddr);
@@ -270,7 +302,13 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
     // tell the replacement policy we have an llc write hit
     auto set = m_cache_sets[set_idx];
 
-    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_hit(set, page, block_idx, is_write);
+    auto [cows_cache_miss, cows_cache_evicted, miss_not_handled] = m_policy->llc_hit(set, page, block_idx, is_write);
+    if(miss_not_handled) {
+        s_miss_not_handled++;
+        s_miss_not_handled_on_llc_hit++;
+        // the miss cannot be handled (e.g., all lines in the set are pending). For simplicity we treat it as a miss and retry later.
+        return {true, 0, true};
+    }
     if(m_always_miss) {
         cows_cache_miss = true;
     }
@@ -284,7 +322,19 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
     ++s_access;
     ++s_accesses_on_llc_hit;
     m_stats_set_access[set_idx]++;
-    if(cows_cache_miss) {
+
+    // hit-under-miss?
+    if(!cows_cache_miss && !page->isReady()) {
+
+        cows_cache_miss = true;
+        assert(page->getWhenReady() > clk);
+        latency = page->getWhenReady() - clk;
+
+        s_half_misses_on_llc_hit++;
+        s_half_misses++;
+    }
+    // real miss?
+    else if(cows_cache_miss) {
         ++s_misses;
         ++s_misses_on_llc_hit;
         m_stats_set_miss[set_idx]++;
@@ -293,6 +343,10 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
 
         // miss latency is at least a cows cache access latency
         latency += get_dram_latency_on_translation(page_num);
+
+        page->setWhenReady(clk + latency);
+        page->setPending(true);
+        m_pending_lines.push_back(page);
     }
     else {
         ++s_hits;
@@ -300,10 +354,10 @@ std::pair<bool, uint32_t> CoWsCache::llc_hit(Addr_t baddr, bool is_write, Clk_t 
 
     s_cows_cycles += latency;
 
-    return {cows_cache_miss, latency};
+    return {cows_cache_miss, latency, false};
 }
 
-std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
+std::tuple<bool, uint32_t, bool> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses)
 {
     AddrParser ap(baddr);
     auto page_addr = ap.getPageAddr();
@@ -323,7 +377,13 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
     //
     auto& set = m_cache_sets[set_idx];
 
-    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_miss(set, page, block_idx, is_write);
+    auto [cows_cache_miss, cows_cache_evicted, miss_not_handled] = m_policy->llc_miss(set, page, block_idx, is_write);
+    if(miss_not_handled) {
+        s_miss_not_handled++;
+        s_miss_not_handled_on_llc_miss++;
+        // the miss cannot be handled (e.g., all lines in the set are pending). For simplicity we treat it as a miss and retry later.
+        return {true, 0, true}; // treat it as a miss, but return the latency of just accessing the cows cache. The caller should retry this access later.
+    }
     if(m_always_miss) {
         cows_cache_miss = true;
     }
@@ -336,7 +396,21 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
     ++s_access;
     ++s_accesses_on_llc_miss;
     m_stats_set_access[set_idx]++;
-    if(cows_cache_miss) {
+
+    // hit-under-miss?
+    if(!cows_cache_miss && !page->isReady()) {
+        cows_cache_miss = true;
+        if(page->getWhenReady() < clk) {
+            fprintf(stderr, "Error: page should not be ready yet. clk=%lu, when_ready=%lu\n", clk, page->getWhenReady());
+        }
+        assert(page->getWhenReady() >= clk);
+        latency = page->getWhenReady() - clk;
+
+        s_half_misses_on_llc_miss++;
+        s_half_misses++;
+    }
+    // real miss?
+    else if(cows_cache_miss) {
         ++s_misses;
         ++s_misses_on_llc_miss;
         m_stats_set_miss[set_idx]++;
@@ -344,6 +418,10 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
         track_misses(clk, total_llc_misses);
 
         latency += get_dram_latency_on_translation(page_num);
+
+        page->setWhenReady(clk + latency);
+        page->setPending(true);
+        m_pending_lines.push_back(page);
     }
     else {
         ++s_hits;
@@ -351,12 +429,12 @@ std::pair<bool, uint32_t> CoWsCache::llc_miss(Addr_t baddr, bool is_write, Clk_t
 
     s_cows_cycles += latency;
 
-    return {cows_cache_miss, latency};
+    return {cows_cache_miss, latency, false};
 }
 
 void foo_break() { printf("breaking here\n"); }
 
-std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses)
+std::tuple<bool, uint32_t, bool> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses)
 {
     AddrParser ap(baddr);
     auto page_addr = ap.getPageAddr();
@@ -376,7 +454,13 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
 
     auto set = m_cache_sets[set_idx];
 
-    auto [cows_cache_miss, cows_cache_evicted] = m_policy->llc_evict(set, page, block_idx);
+    auto [cows_cache_miss, cows_cache_evicted, miss_not_handled] = m_policy->llc_evict(set, page, block_idx);
+    if(miss_not_handled) {
+        s_miss_not_handled++;
+        s_miss_not_handled_on_llc_evict++;
+        // the miss cannot be handled (e.g., all lines in the set are pending). For simplicity we treat it as a miss and retry later.
+        return {true, latency, true}; // treat it as a miss, but return the latency of just accessing the cows cache. The caller should retry this access later.
+    }
     if(m_always_miss) {
         cows_cache_miss = true;
     }
@@ -390,7 +474,17 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
     ++s_accesses_on_llc_evict;
     m_stats_set_access[set_idx]++;
 
-    if(cows_cache_miss) {
+    // hit-under-miss?
+    if(!cows_cache_miss && !page->isReady()) {
+        cows_cache_miss = true;
+        assert(page->getWhenReady() >= clk);
+        latency = page->getWhenReady() - clk;
+
+        s_half_misses_on_llc_evict++;
+        s_half_misses++;
+    }
+    // real miss?
+    else if(cows_cache_miss) {
         ++s_misses;
         ++s_misses_on_llc_evict;
         m_stats_set_miss[set_idx]++;
@@ -398,6 +492,10 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
         track_misses(clk, total_llc_misses);
 
         latency += get_dram_latency_on_translation(page_num);
+
+        page->setWhenReady(clk + latency);
+        page->setPending(true);
+        m_pending_lines.push_back(page);
     }
     else {
         ++s_hits;
@@ -405,7 +503,7 @@ std::pair<bool, uint32_t> CoWsCache::llc_evict(Addr_t baddr, bool evict_dirty, C
 
     s_cows_cycles += latency;
 
-    return {cows_cache_miss, latency};
+    return {cows_cache_miss, latency, false};
 }
 
 void CoWsCache::fini()
@@ -433,6 +531,8 @@ void CoWsCache::fini()
 
     // dump stat: cycles between misses
     {
+        std::map<Clk_t, size_t> diff_histogram;
+        size_t diff_count = 0;
         auto of = std::ofstream(m_stats.stats_fname + ".cycles-between-misses");
 
         std::cout<<"# Dumping CoWs stats"<<std::endl;
@@ -443,9 +543,25 @@ void CoWsCache::fini()
             auto diff = clk - prev_clk;
             prev_clk = clk;
 
+            diff_histogram[diff]++;
+            diff_count++;
+
             snprintf(outbuf, 1024, "%12ld%12ld", clk, diff);
             of<<outbuf<<std::endl;
         }
+        of.close();
+
+        of = std::ofstream(m_stats.stats_fname + ".cycles-between-misses-cdf");
+        size_t cumulative_count = 0;
+        for (const auto& [latency, count] : diff_histogram) {
+            cumulative_count += count;
+
+            const double pdf = diff_count == 0 ? 0.0 : static_cast<double>(count) / diff_count;
+            const double cdf = diff_count == 0 ? 0.0 : static_cast<double>(cumulative_count) / diff_count;
+
+            of << latency << "\t\t\t" << pdf << "\t\t\t" << cdf << std::endl;
+        }
+        of.close();
     }
 
     // dump stat: set popularity

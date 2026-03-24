@@ -1,5 +1,6 @@
 #include <iostream>
 #include <iomanip>
+#include <map>
 #include "frontend/impl/processor/simpleO3/llc.h"
 
 namespace Ramulator {
@@ -20,6 +21,11 @@ m_latency(latency), m_cows_cache(cows_cache), m_size_bytes(size_bytes), m_linesi
 
 void SimpleO3LLC::tick() {
   m_clk++;
+
+  // Check pending lines in cows cache and update their status.
+  if(m_cows_cache != nullptr) {
+    m_cows_cache->check_pending_lines(m_clk);
+  }
 
   // Send miss requests to the memory system when LLC latency is met
   // TODO: Optimization by assuming in-order issue?
@@ -126,7 +132,7 @@ bool SimpleO3LLC::send(Request req) {
       s_llc_mshr_unavailable++;
 
 
-      printf("LLC: No MSHR entry available. clk=%lu\n", m_clk);
+//      printf("LLC: No MSHR entry available. clk=%lu\n", m_clk);
       return false;
     }
 
@@ -140,7 +146,7 @@ bool SimpleO3LLC::send(Request req) {
     // MSHR hit processing: add the request to the MSHR entry and return
     if (mshr_it != m_mshrs.end()) {
       DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "MSHR Hit.", m_clk);
-      printf("LLC: MSHR Hit. (mshr.size=%lu, mshr_it.size=%lu). clk=%lu\n", m_mshrs.size(), m_receive_requests[mshr_it->first].size()+1, m_clk);
+//      printf("LLC: MSHR Hit. (mshr.size=%lu, mshr_it.size=%lu). clk=%lu\n", m_mshrs.size(), m_receive_requests[mshr_it->first].size()+1, m_clk);
 
       req.cache_status = Request::CacheStatus::HalfMiss;
 
@@ -149,6 +155,30 @@ bool SimpleO3LLC::send(Request req) {
 
       mshr_it->second->dirty = dirty || mshr_it->second->dirty;
       return true;
+    }
+
+    // check cows_cache before we allocate a new line, since line allocation in cows_cache can also fail
+    // Yoav: is the dram page translation available in the cows cache?
+    uint32_t cows_latency = 0;
+    bool cows_miss = false;
+    if(m_cows_cache != nullptr) {
+      bool cows_miss_not_handled = false;
+      std::tie(cows_miss, cows_latency, cows_miss_not_handled) = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
+      if(cows_miss_not_handled) {
+        // cannot allocate line in cows cache (e.g., all lines in the set are pending). For simplicity we treat it as a miss and retry later.
+        return false;
+      }
+
+#if 0
+      printf("cows_miss[clk=%lu]: total_misses=%d, cows_misses=%lu [h=%lu, m=%lu, e=%lu] (addr=0x%lx, is_write=%d, llc_lat=%u, cows_lat=%u)\n",
+              m_clk,
+              total_misses(), m_cows_cache->s_misses,
+              m_cows_cache->s_misses_on_llc_hit, m_cows_cache->s_misses_on_llc_miss, m_cows_cache->s_misses_on_llc_evict,
+              req.addr, (int)(req.type_id == Request::Type::Write),
+              m_latency, cows_latency);
+#endif
+
+      s_llc_total_cows_latency += cows_latency;
     }
 
     // Check if there is available cache line in the set
@@ -164,7 +194,7 @@ bool SimpleO3LLC::send(Request req) {
     }
     if (!line_available) {
       DEBUG_LOG(DSIMPLEO3LLC, m_logger,  "No cache line available in the set.", m_clk);
-      printf("LLC: No cache line available in the set. clk=%lu\n", m_clk);
+//      printf("LLC: No cache line available in the set. clk=%lu\n", m_clk);
       return false;
     }
 
@@ -176,24 +206,6 @@ bool SimpleO3LLC::send(Request req) {
       return false;
     }
     newline_it->dirty = dirty;
-
-    // Yoav: is the dram page translation available in the cows cache?
-    uint32_t cows_latency = 0;
-    bool cows_miss = false;
-    if(m_cows_cache != nullptr) {
-      std::tie(cows_miss, cows_latency) = m_cows_cache->llc_miss(req.addr, (req.type_id == Request::Type::Write), m_clk, total_misses());
-
-#if 0
-      printf("cows_miss[clk=%lu]: total_misses=%d, cows_misses=%lu [h=%lu, m=%lu, e=%lu] (addr=0x%lx, is_write=%d, llc_lat=%u, cows_lat=%u)\n",
-              m_clk,
-              total_misses(), m_cows_cache->s_misses,
-              m_cows_cache->s_misses_on_llc_hit, m_cows_cache->s_misses_on_llc_miss, m_cows_cache->s_misses_on_llc_evict,
-              req.addr, (int)(req.type_id == Request::Type::Write),
-              m_latency, cows_latency);
-#endif
-
-      s_llc_total_cows_latency += cows_latency;
-    }
 
     // update request status
     if(cows_miss) {
@@ -213,7 +225,7 @@ bool SimpleO3LLC::send(Request req) {
     std::vector<Request> _req_v{req};
     m_receive_requests[req.addr] = _req_v;
 
-    printf("LLC: MSHR New. (mshr.size=%lu). clk=%lu\n", m_mshrs.size(), m_clk);
+//    printf("LLC: MSHR New. (mshr.size=%lu). clk=%lu\n", m_mshrs.size(), m_clk);
 
     // Add to the miss request list
     m_miss_list.push_back(std::make_pair(m_clk + m_latency + cows_latency, req));
@@ -257,7 +269,7 @@ void SimpleO3LLC::receive(Request& req) {
 
     it->second->ready = true;
     m_mshrs.erase(it);
-    printf("LLC: MSHR Entry removed. (mshr.size=%lu). clk=%lu\n", m_mshrs.size(), m_clk);
+//    printf("LLC: MSHR Entry removed. (mshr.size=%lu). clk=%lu\n", m_mshrs.size(), m_clk);
   }
 };
 
@@ -310,8 +322,10 @@ void SimpleO3LLC::evict_line(CacheSet_t& set, CacheSet_t::iterator victim_it) {
     // Yoav: if the line is dirty, we need to consult the cows_cache about the target address
     bool cows_miss = false;
     uint32_t cows_latency = 0;
+    bool cows_miss_not_handled = false;
     if(m_cows_cache != nullptr) {
-      std::tie(cows_miss, cows_latency) = m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk, total_misses());
+      std::tie(cows_miss, cows_latency, cows_miss_not_handled) = m_cows_cache->llc_evict(victim_it->addr, victim_it->dirty, m_clk, total_misses());
+      // TODO: what do we do if the cows_miss cannot be handled? for now, just fake it and we'll get another miss next time.
       s_llc_total_cows_latency += cows_latency;
     }
 
@@ -399,48 +413,114 @@ void SimpleO3LLC::dump_llc() {
 
 void SimpleO3LLC::dump_dram_read_latency_samples()
 {
-        auto of = std::ofstream(m_stats_name + ".dram-read-latency");
+  auto of = std::ofstream(m_stats_name + ".dram-read-latency");
+  std::map<Clk_t, size_t> latency_histogram;
 
-        of<<"# DRAM read latency [addr, latency]"<<std::endl;
-        for(auto it : s_stats_dram_latency) {
-            auto [addr, latency] = it;
-            of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<std::endl;
-        }
-        of.close();
+  of << "# Total dram read latency [addr\t\t\tlatency]" << std::endl;
+
+  for (const auto& it : s_stats_dram_latency) {
+      auto [addr, latency] = it;
+      latency_histogram[latency]++;
+
+      of << std::hex << "0x" << addr << "\t\t\t" << std::dec << latency << std::endl;
+  }
+  of.close();
+
+  of = std::ofstream(m_stats_name + ".dram-read-latency-cdf");
+  of << "# Total dram read latency [latency\t\t\tPDF\t\t\tCDF]" << std::endl;
+  of << std::fixed << std::setprecision(4);
+  of << 0 << "\t\t\t" << 0.0 << "\t\t\t" << 0.0 << std::endl;
+
+  size_t cumulative_count = 0;
+  const size_t total_count = s_stats_dram_latency.size();
+  for (const auto& [latency, count] : latency_histogram) {
+      cumulative_count += count;
+
+      const double pdf = total_count == 0 ? 0.0 : static_cast<double>(count) / total_count;
+      const double cdf = total_count == 0 ? 0.0 : static_cast<double>(cumulative_count) / total_count;
+
+      of << latency << "\t\t\t" << pdf << "\t\t\t" << cdf << std::endl;
+  }
+
+  of.close();
 }
 
 void SimpleO3LLC::dump_total_read_latency_samples()
 {
-        auto of = std::ofstream(m_stats_name + ".total-read-latency");
+  auto of = std::ofstream(m_stats_name + ".total-read-latency");
+  std::map<Clk_t, size_t> latency_histogram;
 
-        of<<"# Total read latency [addr, latency]"<<std::endl;
-        for(auto it : s_stats_read_latencies) {
-            auto [addr, latency] = it;
-            of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<std::endl;
-        }
-        of.close();
+  of << "# Total read latency [addr\t\t\tlatency]" << std::endl;
+
+  for (const auto& it : s_stats_read_latencies) {
+      auto [addr, latency] = it;
+      latency_histogram[latency]++;
+
+      of << std::hex << "0x" << addr << "\t\t\t" << std::dec << latency << std::endl;
+  }
+  of.close();
+
+  of = std::ofstream(m_stats_name + ".total-read-latency-cdf");
+  of << "# Total read latency\t\t\tPDF\t\t\tCDF" << std::endl;
+  of << std::fixed << std::setprecision(4);
+  of << 0 << "\t\t\t" << 0.0 << "\t\t\t" << 0.0 << std::endl;
+
+  size_t cumulative_count = 0;
+  const size_t total_count = s_stats_read_latencies.size();
+  for (const auto& [latency, count] : latency_histogram) {
+      cumulative_count += count;
+
+      const double pdf = total_count == 0 ? 0.0 : static_cast<double>(count) / total_count;
+      const double cdf = total_count == 0 ? 0.0 : static_cast<double>(cumulative_count) / total_count;
+
+      of << latency << "\t\t\t" << pdf << "\t\t\t" << cdf << std::endl;
+  }
+
+  of.close();
 }
 
 void SimpleO3LLC::dump_total_read_miss_latency_samples()
 {
-        auto of = std::ofstream(m_stats_name + ".total-read-miss-latency");
+  std::map<Clk_t, size_t> latency_histogram;
+  auto of = std::ofstream(m_stats_name + ".total-read-miss-latency");
 
-        of<<"# Total read miss latency [addr, latency, miss type (M=Miss, CM=CoWs Miss, HM=HalfMiss)]"<<std::endl;
-        for(auto it : s_stats_read_miss_latencies) {
-            auto [addr, latency, miss_type] = it;
-            auto miss_type_str = "Unknown";
-            if(miss_type == Request::CacheStatus::Miss) {
-              miss_type_str = "M";
-            }
-            else if(miss_type == Request::CacheStatus::CowsMiss) {
-              miss_type_str = "CM";
-            }
-            else if(miss_type == Request::CacheStatus::HalfMiss) {
-              miss_type_str = "HM";
-            }
-            of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<"\t\t\t"<<miss_type_str<<std::endl;
-        }
-        of.close();
+  of<<"# Total read miss latency [addr, latency, miss type (M=Miss, CM=CoWs Miss, HM=HalfMiss)]"<<std::endl;
+  for(auto it : s_stats_read_miss_latencies) {
+      auto [addr, latency, miss_type] = it;
+      latency_histogram[latency]++;
+
+      auto miss_type_str = "Unknown";
+      if(miss_type == Request::CacheStatus::Miss) {
+        miss_type_str = "M";
+      }
+      else if(miss_type == Request::CacheStatus::CowsMiss) {
+        miss_type_str = "CM";
+      }
+      else if(miss_type == Request::CacheStatus::HalfMiss) {
+        miss_type_str = "HM";
+      }
+      of<<std::hex<<"0x"<<addr<<"\t\t\t"<<std::dec<<latency<<"\t\t\t"<<miss_type_str<<std::endl;
+  }
+  of.close();
+
+  of = std::ofstream(m_stats_name + ".total-read-miss-latency-cdf");
+  of << "# Total read miss latency\t\t\tPDF\t\t\tCDF" << std::endl;
+  of << std::fixed << std::setprecision(4);
+  of << 0 << "\t\t\t" << 0.0 << "\t\t\t" << 0.0 << std::endl;
+
+  size_t cumulative_count = 0;
+  const size_t total_count = s_stats_read_miss_latencies.size();
+  for (const auto& [latency, count] : latency_histogram) {
+      cumulative_count += count;
+
+      const double pdf = total_count == 0 ? 0.0 : static_cast<double>(count) / total_count;
+      const double cdf = total_count == 0 ? 0.0 : static_cast<double>(cumulative_count) / total_count;
+
+      of << latency << "\t\t\t" << pdf << "\t\t\t" << cdf << std::endl;
+  }
+
+  of.close();
+
 }
 
 void SimpleO3LLC::dump_mshr_utilization()
@@ -448,21 +528,20 @@ void SimpleO3LLC::dump_mshr_utilization()
   Clk_t mshr_period[m_num_mshrs] = {0};
   Clk_t total_cycles = 0;
 
-  {
-    auto of = std::ofstream(m_stats_name + ".mshr-raw-utilization");
+  dump_raw_stats(s_stats_mshr_utilization,
+                 m_stats_name + ".mshr-raw-utilization",
+                 "# MSHR utilization [clk, duration, size]",
+                 formatter_3tuple);
 
-    of<<"# MSHR utilization [clk, duration, size]"<<std::endl;
+  {
     for(auto it : s_stats_mshr_utilization) {
         auto [clk, duration, size] = it;
-        of<<clk<<"\t\t\t"<<duration<<"\t\t\t"<<size<<std::endl;
 
         assert(size < m_num_mshrs);
         mshr_period[size] += duration;
         total_cycles += duration;
     }
-    of.close();
-  }
-  {
+
     auto of = std::ofstream(m_stats_name + ".mshr-cdf-utilization");
 
     of<<"# MSHR utilization [mshr_util, cycles, frac, cdf]"<<std::endl;
@@ -473,7 +552,7 @@ void SimpleO3LLC::dump_mshr_utilization()
       cumulative_cycles += mshr_period[i];
       float cdf = (1.0*cumulative_cycles) / total_cycles;
 
-      of<<i<<"\t\t\t"<<frac<<"\t\t\t"<<cdf<<std::endl;
+      of<<i<<"\t\t\t"<<mshr_period[i]<<"\t\t\t"<<frac<<"\t\t\t"<<cdf<<std::endl;
     }
     of.close();
 

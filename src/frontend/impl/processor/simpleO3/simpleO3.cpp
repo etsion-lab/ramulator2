@@ -146,7 +146,14 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cows_cache->s_misses_on_llc_hit).name("cows_misses_on_llc_hit");
         register_stat(m_cows_cache->s_misses_on_llc_miss).name("cows_misses_on_llc_miss");
         register_stat(m_cows_cache->s_misses_on_llc_evict).name("cows_misses_on_llc_evict");
+        register_stat(m_cows_cache->s_half_misses_on_llc_hit).name("cows_half_misses_on_llc_hit");
+        register_stat(m_cows_cache->s_half_misses_on_llc_miss).name("cows_half_misses_on_llc_miss");
+        register_stat(m_cows_cache->s_half_misses_on_llc_evict).name("cows_half_misses_on_llc_evict");
+        register_stat(m_cows_cache->s_miss_not_handled_on_llc_hit).name("cows_miss_not_handled_on_llc_hit");
+        register_stat(m_cows_cache->s_miss_not_handled_on_llc_miss).name("cows_miss_not_handled_on_llc_miss");
+        register_stat(m_cows_cache->s_miss_not_handled_on_llc_evict).name("cows_miss_not_handled_on_llc_evict");
         register_stat(m_cows_cache->s_misses).name("cows_misses");
+        register_stat(m_cows_cache->s_half_misses).name("cows_half_misses");
         register_stat(m_cows_cache->s_hits).name("cows_hits");
         register_stat(m_cows_cache->s_evicts).name("cows_evicts");
         static auto cows_missrate = DIV(m_cows_cache->s_misses, m_cows_cache->s_access);
@@ -171,7 +178,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         register_stat(m_cores[core_id]->s_insts_retired, false).name("insts_retired_core_{}", core_id);
         register_stat(m_cores[core_id]->s_cycles_recorded, false).name("cycles_recorded_core_{}", core_id);
         register_stat(m_cores[core_id]->s_cycles_recorded_post_warmup).name("cycles_recorded_post_warmup_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_total_cycles_recorded_post_warmup).name("total_cycles_recorded_post_warmup_core_{}", core_id);
         register_stat(m_cores[core_id]->s_insts_retired_post_warmup).name("insts_retired_post_warmup_core_{}", core_id);
+        register_stat(m_cores[core_id]->s_total_insts_retired_post_warmup).name("total_insts_retired_post_warmup_core_{}", core_id);
         register_stat(m_cores[core_id]->s_mem_access_cycles).name("memory_access_cycles_recorded_core_{}", core_id);
         auto frac_cycles_post_warmup = new DIV(m_cores[core_id]->s_cycles_recorded_post_warmup, m_cores[core_id]->s_cycles_recorded);
         auto frac_insts_post_warmup = new DIV(m_cores[core_id]->s_insts_retired_post_warmup, m_num_expected_insts);
@@ -227,7 +236,7 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
         if(r.cache_status != Request::CacheStatus::Hit) {
           m_llc->s_avg_total_read_miss_lat_sum += total_read_latency;
           m_llc->s_avg_total_read_miss_lat_cnt += 1;
-          printf("LLC: total read latency sample. clk=%lu, cache_status=%d, addr=0x%lx, total_read_latency=%lu\n", m_clk, r.cache_status, r.addr, total_read_latency);
+//          printf("LLC: total read latency sample. clk=%lu, cache_status=%d, addr=0x%lx, total_read_latency=%lu\n", m_clk, r.cache_status, r.addr, total_read_latency);
           m_llc->s_stats_read_miss_latencies.push_back(std::make_tuple(r.addr, total_read_latency, r.cache_status));
         }
 
@@ -247,6 +256,9 @@ class SimpleO3 final : public IFrontEnd, public Implementation {
       }
       m_llc->fini();
 
+      for (auto core : m_cores) {
+        core->fini();
+      }
       return true;
     }
 

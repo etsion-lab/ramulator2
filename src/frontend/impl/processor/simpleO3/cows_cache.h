@@ -96,11 +96,15 @@ public:
             bool valid;
             bool dirty;
 
+
             Addr_t page_phys_addr;
             Addr_t tag;
             uint32_t set_id;
 
-            Clk_t ready_clk;
+            bool ready = false; // whether this line is ready (i.e., is still inflight?)
+            bool pending; // in the pending list
+            Clk_t ready_clk = -1;
+
             std::vector<bool> block_map;
             uint32_t max_present_count;
 
@@ -113,10 +117,13 @@ public:
                 valid = false;
                 dirty = false;
 
+
                 setPageAddr(NULL_ADDR);
                 tag = NULL_ADDR;
                 set_id=(uint32_t)-1;
 
+                ready = false;
+                pending = false;
                 ready_clk = -1;
                 std::fill(block_map.begin(), block_map.end(), false);
                 max_present_count = 0;
@@ -146,15 +153,33 @@ public:
                 }
             }
 
-            void setReadyClk(Clk_t when_ready) {
+            void setWhenReady(Clk_t when_ready) {
                 ready_clk = when_ready;
+                ready = false;
             }
 
-            Clk_t whenReady(Clk_t now) {
-                if(now > ready_clk)
-                    return 0;
+            bool checkIfReady(Clk_t now) {
+                if(now > ready_clk) {
+                    ready = true;
+                    pending = false;
+                }
+                return ready;
+            }
 
-                return (now - ready_clk);
+            Clk_t getWhenReady() const {
+                return ready_clk;
+            }
+
+            bool isReady() const {
+                return ready;
+            }
+
+            void setPending(bool p) {
+                pending = p;
+            }
+
+            bool getPending() const {
+                return pending;
             }
 
             void setValid(bool v) {
@@ -215,15 +240,20 @@ public:
         // all methods return:
         // bool 1: hit/miss in the cows_cache
         // bool 2: was a block evicted from the cows_cache
-        virtual std::pair<bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
-        virtual std::pair<bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
-        virtual std::pair<bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const = 0;
+        // bool 3: unhandled_miss: whether the miss was handled (e.g., if all lines in the set are pending, the miss cannot be handled and should be retried later)
+        virtual std::tuple<bool,bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
+        virtual std::tuple<bool,bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const = 0;
+        virtual std::tuple<bool,bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const = 0;
 
         protected:
         virtual CacheSet_t::iterator victim(CacheSet_t& set) const {
-            auto victim = set.begin();
+            for(auto it = set.begin(); it != set.end(); ++it) {
+                if((*it)->isReady()) {
+                    return it;
+                }
+            }
 
-            return victim;
+            return set.end();
         }
 
         CacheSet_t::iterator find_in_set(CacheSet_t& set, Addr_t tag) const {
@@ -231,7 +261,7 @@ public:
             return std::find_if(set.begin(), set.end(), match);
         }
 
-        std::pair<CacheSet_t::iterator, bool> alloc_line(CacheSet_t& set, Line* page) const {
+        std::tuple<CacheSet_t::iterator, bool> alloc_line(CacheSet_t& set, Line* page) const {
             CacheSet_t::iterator it;
             bool do_evict = false;
 
@@ -245,6 +275,12 @@ public:
 
                 // set is full so get the a victim
                 it = victim(set);
+
+                // no victim? return
+                if(it == set.end()) {
+                    return {set.end(), do_evict};
+                }
+
                 auto victim = *it;
                 set.erase(it);
                 set.push_back(page);
@@ -285,9 +321,9 @@ public:
     class LRU_nohit : public ReplPolicy  {
         public:
         virtual std::string name() const override { return "LRU_nohit"; }
-        std::pair<bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
-        std::pair<bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
-        std::pair<bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const override;
+        std::tuple<bool,bool,bool> llc_hit(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
+        std::tuple<bool,bool,bool> llc_miss(CacheSet_t& set, Line* page, uint32_t block_id, bool is_write) const override;
+        std::tuple<bool,bool,bool> llc_evict(CacheSet_t& set, Line* page, uint32_t block_id) const override;
     };
 
 private:
@@ -310,6 +346,9 @@ private:
     // perfect cache
     std::unordered_map<Addr_t, Line> m_perfect_cache;
 
+    // list of pending hit-under-miss lines
+    std::list<Line*> m_pending_lines;
+
     std::vector<CacheSet_t> m_cache_sets;
     ReplPolicy* m_policy;
 
@@ -324,6 +363,8 @@ public:
     // public stats
     uint64_t s_hits = 0;
     uint64_t s_misses = 0;
+    uint64_t s_half_misses = 0; // hit-under-miss
+    uint64_t s_miss_not_handled = 0; // hit-under-miss
     uint64_t s_access = 0;
     uint64_t s_evicts = 0;
 
@@ -333,6 +374,12 @@ public:
     uint64_t s_misses_on_llc_hit = 0;
     uint64_t s_misses_on_llc_miss = 0;
     uint64_t s_misses_on_llc_evict = 0;
+    uint64_t s_half_misses_on_llc_hit = 0;
+    uint64_t s_half_misses_on_llc_miss = 0;
+    uint64_t s_half_misses_on_llc_evict = 0;
+    uint64_t s_miss_not_handled_on_llc_hit = 0;
+    uint64_t s_miss_not_handled_on_llc_miss = 0;
+    uint64_t s_miss_not_handled_on_llc_evict = 0;
 
     uint64_t s_cows_cycles = 0;
     uint64_t s_cows_cycles_self = 0;
@@ -353,18 +400,22 @@ public:
     // called when simulation finished to dump stats
     void fini();
 
-    std::pair<bool, Line*> perfect_cache_lookup(Addr_t page_addr);
+    std::tuple<bool, Line*> perfect_cache_lookup(Addr_t page_addr);
 
-    // these functions return the latency incurred by the cows cach access (fill + potential WB)
-    std::pair<bool, uint32_t> llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
-    std::pair<bool, uint32_t> llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
-    std::pair<bool, uint32_t> llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses);
+    // these functions return:
+    // bool: true if hit, false if miss in the cows_cache
+    // uint32_t: the latency incurred by the cows cach access (fill + potential WB)
+    // bool: unhandled_miss: whether the miss was handled (e.g., if all lines in the set are pending, the miss cannot be handled and should be retried later)
+    std::tuple<bool, uint32_t, bool> llc_hit(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
+    std::tuple<bool, uint32_t, bool> llc_miss(Addr_t baddr, bool is_write, Clk_t clk, int total_llc_misses);
+    std::tuple<bool, uint32_t, bool> llc_evict(Addr_t baddr, bool evict_dirty, Clk_t clk, int total_llc_misses);
 
     uint32_t get_dram_latency_on_translation(Addr_t addr) {
         return m_dram_latency_on_translation;
     }
     uint32_t get_access_latency() { return m_access_latency; }
 
+    void check_pending_lines(Clk_t clk);
 private:
     void track_misses(Clk_t clk, int total_llc_misses) {
         static Clk_t last_print = 0;
