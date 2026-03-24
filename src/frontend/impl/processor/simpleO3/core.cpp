@@ -191,21 +191,22 @@ SimpleO3Core::SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts
 void SimpleO3Core::tick() {
   m_clk++;
 
-  s_insts_retired += m_window.retire();
+  auto insts_retired = m_window.retire();
+  s_insts_retired += insts_retired;
+  s_total_insts_retired_post_warmup += insts_retired;
 
-  if(m_id == 0) {
-    const uint32_t PRINT_EVERY_INSTS = 1000000;
-    static uint64_t last_printed_insts = 0;
-    static uint64_t prev_insts_retired = 0;
-    static uint64_t prev_clk = 0;
-    if(s_insts_retired > last_printed_insts + PRINT_EVERY_INSTS) {
-      auto insts = s_insts_retired - prev_insts_retired;
-      auto cycle = m_clk - prev_clk;
-      fprintf(stderr, "Core %u retired %lu insts in %lu cycles (curr ipc=%.3f).\n  ",
-              m_id, s_insts_retired, m_clk, (1.0f*insts)/cycle);
-      last_printed_insts += PRINT_EVERY_INSTS;
-      prev_insts_retired = s_insts_retired;
-      prev_clk = m_clk;
+  {
+    const size_t PRINT_EVERY_INSTS = 1000000;
+    if(s_insts_retired > (s_prev_insts_retired + PRINT_EVERY_INSTS)) {
+      auto insts = s_insts_retired - s_prev_insts_retired;
+      auto cycle = m_clk - s_prev_clk;
+      s_stats_ipc.push_back({m_clk, 1.0f*insts/cycle});
+      if(m_id == 0) {
+        printf("# Core %d: Retired %lu instructions at cycle %lu (%.2f IPC for the last %lu instructions)\n",
+               m_id, (unsigned long)s_insts_retired, (unsigned long)m_clk, 1.0f*insts/cycle, (unsigned long)insts);
+      }
+      s_prev_insts_retired = s_insts_retired;
+      s_prev_clk = m_clk;
     }
   }
 
@@ -298,6 +299,16 @@ void SimpleO3Core::receive(Request& req) {
       m_last_mem_cycle = req.depart;
     }
   }
+}
+
+void SimpleO3Core::fini() {
+  s_total_cycles_recorded_post_warmup = m_clk - m_finished_warmup_at_cycle;
+
+  printf("# fini: stats_ipc.size()=%lu\n", (unsigned long)s_stats_ipc.size());
+  dump_raw_stats(s_stats_ipc,
+                 fmt::format("core{}_ipc_stats", m_id),
+                 fmt::format("# IPC trace: (cycle, ipc)"),
+                 formatter_2tuple);
 }
 
 }        // namespace Ramulator

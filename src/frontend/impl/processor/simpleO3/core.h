@@ -147,9 +147,16 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
     bool finished_warmup = false;
     size_t s_insts_retired = 0;
     size_t s_insts_retired_post_warmup = 0;
+    size_t s_total_insts_retired_post_warmup = 0;
     size_t s_cycles_recorded = 0;
     size_t s_cycles_recorded_post_warmup = 0;
+    size_t s_total_cycles_recorded_post_warmup = 0;
     Clk_t  s_mem_access_cycles = 0;
+
+    std::vector<std::tuple<Clk_t, float>> s_stats_ipc;
+    size_t s_last_printed_insts = 0;
+    size_t s_prev_insts_retired = 0;
+    size_t s_prev_clk = 0;
 
   public:
     SimpleO3Core(int id, int ipc, int depth, size_t num_expected_insts, size_t warmup_percent, std::string trace_path, bool cows_accel_zero_page, ITranslation* translation, SimpleO3LLC* llc);
@@ -165,7 +172,9 @@ class SimpleO3Core : public Clocked<SimpleO3Core> {
      *
      */
     void receive(Request& req);
-};
+
+    void fini();
+  };
 
 }        // namespace Ramulator
 
