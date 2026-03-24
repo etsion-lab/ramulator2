@@ -24,7 +24,7 @@ Frontend:
   llc_latency: 50
   llc_linesize: 64
   llc_associativity: 8
-  llc_num_mshr_per_core: 16
+  llc_num_mshr_per_core: __MSHRS__
   llc_capacity_per_core: 2MB
 
   cows_accel_zero_page: false
