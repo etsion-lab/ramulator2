@@ -4,6 +4,12 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <functional>
+#include <iostream>
+#include <fstream>
+#include <iomanip>
+
+#include "spdlog/spdlog.h"
 
 namespace Ramulator {
 
@@ -94,6 +100,35 @@ Integral_t slice_lower_bits(Integral_t& addr, int num_bits) {
   return lbits;
 };
 
+template <typename T, typename Formatter>
+void dump_raw_stats(const std::vector<T>& stats,
+                    const std::string& file_name,
+                    const std::string& header,
+                    Formatter formatter)
+{
+  std::ofstream out(file_name);
+  out << header << std::endl;
+  for (const auto& stat : stats) {
+    out << formatter(stat) << std::endl;
+  }
+  out.close();
+}
+
+struct Formatter2Tuple {
+  template <typename T1, typename T2>
+  std::string operator()(const std::tuple<T1, T2>& stat) const {
+    return fmt::format("{}\t\t\t{}", std::get<0>(stat), std::get<1>(stat));
+  }
+};
+inline constexpr Formatter2Tuple formatter_2tuple{};
+
+struct Formatter3Tuple {
+  template <typename T1, typename T2, typename T3>
+  std::string operator()(const std::tuple<T1, T2, T3>& stat) const {
+    return fmt::format("{}\t\t\t{}\t\t\t{}", std::get<0>(stat), std::get<1>(stat), std::get<2>(stat));
+  }
+};
+inline constexpr Formatter3Tuple formatter_3tuple{};
 
 /************************************************
  *                Tokenization
